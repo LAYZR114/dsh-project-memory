@@ -59,7 +59,7 @@ flowchart TD
     subgraph L2[L2 场景触发层 · scene.js]
         E2[识别环境 env] --> D2[detectScene 四源归一<br/>file域 / memory_* / bash / 话语]
         D2 --> L2b[deriveLevel P1/P2/P3]
-        L2b --> F2[extractFragment 片段+[来源:slug]]
+        L2b --> F2[extractFragment 片段+来源slug]
         F2 --> CAP[cap≤3 + 同turn去重]
     end
     subgraph L3[L3 规则守卫层 · rule.js]
