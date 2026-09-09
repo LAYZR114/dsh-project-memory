@@ -1,14 +1,26 @@
 {
-  "name": "dsh-polaris-memory",
-  "version": "0.1.0",
+  "name": "@dsh-external/dsh-project-memory",
+  "version": "0.1.1",
   "description": "项目记忆（Project Memory）：本地优先的项目记忆插件。每个项目一份 .dsh-memory.json（按 cwd 隔离），提供 memory_read/recall/write/update/delete 五工具、/memory 命令、设置页记忆管理 UI（编辑/删除/拖动排序/状态过滤/搜索/多项目切换），全部遵循'随核心快速适配'（适配器+探测-退化-上报）与'万物皆插件'（可独立挂载/停用）。",
   "private": false,
-  "publishConfig": { "access": "public" },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/types/index.d.ts",
-  "repository": { "type": "git", "url": "git+https://github.com/<你的GitHub用户名>/dsh-project-memory.git" },
-  "keywords": ["dsh", "deepseek-harness", "dsh-plugin", "memory", "project-memory", "plugin"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/<你的GitHub用户名>/dsh-project-memory.git"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "memory",
+    "project-memory",
+    "plugin"
+  ],
   "scripts": {
     "test": "node --test",
     "prepack": "node --test"
