@@ -1,0 +1,26 @@
+# ---- 发布/开源 .gitignore（排除本机/构建/备份遗留）----
+
+# 本机 junction/桌面 profile 生成物（不进仓库）
+node_modules/
+.dsh/
+profiles/
+
+# 插件运行期记忆文件（用户项目数据，不进仓库）
+*.dsh-memory.json
+.dsh-memory.json
+.dsh-memory.json.*.bak
+
+# 备份/历史快照（进仓库前删掉或留 docs/）
+lib/.bak-*/
+*.bak*
+*.bak-*
+
+# 测试临时
+test/tmp-*
+tmp-*
+*.tgz
+
+# 系统
+.DS_Store
+Thumbs.db
+*.log

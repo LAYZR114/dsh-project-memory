@@ -1,0 +1,15 @@
+# ---- npm 发布排除（.npmignore：发布 tarball 时排除备份/本机遗留）----
+# 备份/历史快照（不进发布包）
+*.bak*
+lib/.bak-*/
+lib/client.js.bak-*
+
+# 测试临时
+test/tmp-*
+tmp-*
+
+# 本机数据
+.dsh-memory.json*
+*.dsh-memory.json
+profiles/
+node_modules/

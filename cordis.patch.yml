@@ -1,0 +1,16 @@
+# dsh-project-memory bundle 层：插入项目记忆宿主插件行。
+# 该包在 lib/index.js 里合并了 store + 5 工具 + /memory 命令 + host RPC route，
+# 全部走官方稳定 seam（tools/commands/fs/webServer），并遵循"探测-退化-上报"。
+- insert:
+    - id: dsh-project-memory
+      name: '@dsh-external/dsh-project-memory'
+      config:
+        fieldWeight: { title: 3, description: 2, body: 0.4 }
+        lexWeight: 0.7
+        heatWeight: 0.3
+        unigramWeight: { latin: 1.5, han: 1.0, other: 0.5 }
+        aliases:
+          合并: [聚合, 归并, 冗余治理]
+          检索: [召回, 搜索]
+        llmProvider: deepseek-official
+        llmModel: deepseek-v4-flash-vision-exp
