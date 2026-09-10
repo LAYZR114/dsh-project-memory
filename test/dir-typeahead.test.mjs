@@ -157,3 +157,55 @@ test('接线：下拉读取历史时先清理；组件与交互齐备', () => {
   assert.match(CLIENT_SRC, /fetchJson\("\/projects", \{ method: "POST", body: JSON\.stringify\(\{ action: "projects" \}\) \}\)/, '要去宿主取现有项目')
   assert.match(CLIENT_SRC, /h\("button", \{ className: "pm-save", onClick: submitDir \}, "保存"\)/, '"保存"按钮走同一条提交逻辑')
 })
+
+// ===== 「选择目录」按钮（用户 2026-09-11 需求）：走官方 directoryPicker =====
+
+/** 真·pickDirectory（index.js 抽取；ctx/noteCwd 注入） */
+const makePickDirectory = (ctx, noteCwd = () => {}) => new Function('ctx', 'noteCwd',
+  extractFn(INDEX_SRC, 'async function pickDirectory(') + '\nreturn pickDirectory')(ctx, noteCwd)
+
+test('pickDirectory：原生能力 → pick() 返回路径即成功，并记入 knownCwds', async () => {
+  const noted = []
+  const pick = makePickDirectory({ get: () => ({ capability: () => ({ kind: 'native', pick: async () => 'D:/DeepSeek' }) }) }, (c) => noted.push(c))
+  assert.deepEqual(await pick(), { ok: true, cwd: 'D:/DeepSeek' })
+  assert.deepEqual(noted, ['D:/DeepSeek'], '选中的目录要记进 knownCwds（下次下拉里就有）')
+})
+
+test('pickDirectory：用户取消（pick 返回 null）→ cancelled（不当作错误刷屏）', async () => {
+  const pick = makePickDirectory({ get: () => ({ capability: () => ({ kind: 'native', pick: async () => null }) }) })
+  assert.deepEqual(await pick(), { ok: false, error: 'cancelled' })
+})
+
+test('pickDirectory：只有浏览能力（browse）→ 如实上报 browse-only，不假装成功', async () => {
+  const pick = makePickDirectory({ get: () => ({ capability: () => ({ kind: 'browse', list: async () => ({}), createDirectory: async () => '' }) }) })
+  assert.deepEqual(await pick(), { ok: false, error: 'browse-only', browse: true })
+})
+
+test('pickDirectory：服务缺失 / capability 抛错 / pick 抛错 → 各自如实返回错误', async () => {
+  assert.match((await makePickDirectory({ get: () => undefined })()).error, /不可用/)
+  assert.match((await makePickDirectory({ get: () => ({ capability: () => { throw new Error('boom-cap') } }) })()).error, /boom-cap/)
+  const throwing = makePickDirectory({ get: () => ({ capability: () => ({ kind: 'native', pick: async () => { throw new Error('boom-pick') } }) }) })
+  assert.match((await throwing()).error, /boom-pick/)
+})
+
+test('API action:pickdir 透传宿主结果（成功/取消两种）', async () => {
+  const okApi = makeApi({ pickDirectory: async () => ({ ok: true, cwd: 'D:/DeepSeek' }) })
+  assert.deepEqual(await okApi.call({ action: 'pickdir' }), { ok: true, cwd: 'D:/DeepSeek' })
+  const cancelApi = makeApi({ pickDirectory: async () => ({ ok: false, error: 'cancelled' }) })
+  assert.deepEqual(await cancelApi.call({ action: 'pickdir' }), { ok: false, error: 'cancelled' })
+})
+
+test('API action:pickdir 在 pickDirectory 缺失时安全返回错误（不 500）', async () => {
+  const r = await makeApi({}).call({ action: 'pickdir' })
+  assert.equal(r.ok, false)
+  assert.match(r.error, /picker unavailable/)
+})
+
+test('接线：「选择目录」按钮存在，选中后切目录并加载；取消静默、无原生能力如实提示', () => {
+  assert.match(CLIENT_SRC, /className: "pm-btn pm-pick", onClick: pickFolder/, '要有「选择目录」按钮并绑到 pickFolder')
+  const block = CLIENT_SRC.slice(CLIENT_SRC.indexOf('const pickFolder = ('), CLIENT_SRC.indexOf('const persist = (next)'))
+  assert.match(block, /action: "pickdir"/, '要调宿主 action:pickdir')
+  assert.match(block, /setCwd\(r\.cwd\);[\s\S]{0,200}?rememberDir\(r\.cwd\);[\s\S]{0,200}?load\(r\.cwd\);/, '选中 → 填框 + 记历史 + 立即加载')
+  assert.match(block, /err === "cancelled"\) \{ setMsg\(""\); return; \}/, '取消：静默不打扰')
+  assert.match(block, /err === "browse-only"\)/, '无原生对话框：如实提示退回手输/下拉')
+})
