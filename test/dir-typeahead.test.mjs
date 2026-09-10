@@ -1,8 +1,8 @@
-// 项目目录 Typeahead 回归（用户 2026-09-11 需求）：
-//   ① 输入目录 + 回车 → 加载该目录的记忆（原来只有点"保存"才行）
+// 项目目录 Typeahead 回归（用户 2026-09-11 需求 + 反馈修正）：
+//   ① 输入目录 + 回车 → 加载该目录的记忆（不是每敲一个字就加载/记录）
 //   ② 下拉（Typeahead）列出"现有项目"：宿主 collectProjects（本进程见过的 cwd + 活跃会话工作目录）
-//      ＋ 本地"最近使用"，可搜索、可用方向键/鼠标选中，选中即加载
-// 本测试：宿主聚合函数真单测（从 index.js 抽取）+ 真 api.js 路由 action:projects + client.js 接线断言。
+//      ＋ 本地"最近使用"，可搜索、方向键/鼠标选中，选中即加载
+//   ③ 【用户反馈修正】历史只在"明确提交"时记录；**没有记忆文件的目录不进下拉**；老垃圾（D:/D、D:/DS）要清掉
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -29,16 +29,15 @@ function extractFn(src, header) {
   }
   throw new Error('未闭合：' + header)
 }
-/** 真·collectProjects（注入它引用的闭包变量） */
-const makeCollectProjects = () => new Function(
-  'knownCwds', 'agents', 'cwdFromAgent', 'readDocSync', 'readMemoryFileMtime', 'MEMORY_FILE',
-  extractFn(INDEX_SRC, 'function collectProjects()') + '\nreturn collectProjects',
-)(...(() => {
-  const knownCwds = new Map()
-  const agents = { list: () => [] }
+/** 真·collectProjects（注入它引用的闭包） */
+function makeCollect(knownCwds, agents) {
   const cwdFromAgent = (a) => (a && a.session && a.session.header && a.session.header.cwd) || undefined
-  return [knownCwds, agents, cwdFromAgent, readDocSync, readMemoryFileMtime, '.dsh-memory.json']
-})())
+  return new Function('knownCwds', 'agents', 'cwdFromAgent', 'readDocSync', 'readMemoryFileMtime', 'MEMORY_FILE',
+    extractFn(INDEX_SRC, 'function collectProjects()') + '\nreturn collectProjects')(
+    knownCwds, agents, cwdFromAgent, readDocSync, readMemoryFileMtime, '.dsh-memory.json')
+}
+/** 真·cleanRecentDirs（client.js 抽取的纯函数） */
+const cleanRecentDirs = new Function(extractFn(CLIENT_SRC, 'function cleanRecentDirs(') + '\nreturn cleanRecentDirs')()
 
 const tmpProject = (memories) => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-proj-'))
@@ -47,7 +46,6 @@ const tmpProject = (memories) => {
 }
 const MEM = (id) => ({ id, title: 't-' + id, description: 'd', body: 'b', type: 'project', status: 'active', updatedAt: '2026-01-01T00:00:00Z', heat: 0 })
 
-/** 真·api.js 路由 + 注入 deps + 假 req/res */
 function makeApi(deps) {
   let handler
   const ctx = { effect: (fn) => { const d = fn(); return () => { if (typeof d === 'function') d() } } }
@@ -64,59 +62,57 @@ function makeApi(deps) {
   }
 }
 
-test('collectProjects：合并"见过的 cwd"，带记忆条数；无记忆文件的目录 count=0', () => {
-  const knownCwds = new Map()
-  const agents = { list: () => [] }
-  const cwdFromAgent = (a) => (a && a.session && a.session.header && a.session.header.cwd) || undefined
-  const collect = new Function('knownCwds', 'agents', 'cwdFromAgent', 'readDocSync', 'readMemoryFileMtime', 'MEMORY_FILE',
-    extractFn(INDEX_SRC, 'function collectProjects()') + '\nreturn collectProjects')(knownCwds, agents, cwdFromAgent, readDocSync, readMemoryFileMtime, '.dsh-memory.json')
-  const a = tmpProject([MEM('m1'), MEM('m2')])
-  const b = tmpProject([])          // 空目录（连文件都没有）
-  knownCwds.set(a, Date.now())
-  knownCwds.set(b, Date.now() - 60000) // b 更早见到 → 排在后面
-  const out = collect()
-  assert.equal(out.length, 2)
-  assert.equal(out[0].cwd, a, '最近见到的排前面')
-  assert.equal(out[0].count, 2, 'a 有 2 条记忆')
-  assert.equal(out[1].cwd, b)
-  assert.equal(out[1].count, 0)
-  assert.ok(typeof out[0].updatedAt === 'number')
+test('collectProjects：只列"真有记忆文件"的目录，半截路径被过滤（用户反馈修正）', () => {
+  const known = new Map()
+  const withFile = tmpProject([MEM('m1'), MEM('m2')])
+  const emptyFile = tmpProject([])                                // 有文件但 0 条 → 仍算项目（能看到空列表）
+  const noFile = path.join(os.tmpdir(), 'pm-none-' + Date.now())  // 没有记忆文件 → 应被过滤
+  known.set(withFile, Date.now())
+  known.set(emptyFile, Date.now() - 1000)
+  known.set(noFile, Date.now())                                   // 最近见到，但没文件
+  const out = makeCollect(known, { list: () => [] })()
+  const cwds = out.map((p) => p.cwd)
+  assert.ok(cwds.includes(withFile))
+  assert.ok(cwds.includes(emptyFile), '有文件但 0 条也要列出（用户可能想往里写）')
+  assert.ok(!cwds.includes(noFile), '没有记忆文件的目录必须被过滤（D:/D、D:/DS 这类）')
+  assert.equal(out[0].cwd, withFile, '仍按"最近见到"排序')
+  assert.equal(out[0].count, 2)
 })
 
 test('collectProjects：把活跃会话的工作目录也算作"现有项目"', () => {
-  const knownCwds = new Map()
+  const known = new Map()
   const live = tmpProject([MEM('x')])
-  const agents = { list: () => [{ id: 'a1', session: { header: { cwd: live } } }] }
-  const cwdFromAgent = (a) => (a && a.session && a.session.header && a.session.header.cwd) || undefined
-  const collect = new Function('knownCwds', 'agents', 'cwdFromAgent', 'readDocSync', 'readMemoryFileMtime', 'MEMORY_FILE',
-    extractFn(INDEX_SRC, 'function collectProjects()') + '\nreturn collectProjects')(knownCwds, agents, cwdFromAgent, readDocSync, readMemoryFileMtime, '.dsh-memory.json')
-  const out = collect()
-  assert.equal(out.length, 1, '活跃会话目录应被收进来')
+  const out = makeCollect(known, { list: () => [{ id: 'a1', session: { header: { cwd: live } } }] })()
+  assert.equal(out.length, 1)
   assert.equal(out[0].cwd, live)
   assert.equal(out[0].count, 1)
 })
 
 test('collectProjects：agents 抛错时不崩（降级为只用已见 cwd）', () => {
-  const knownCwds = new Map()
+  const known = new Map()
   const a = tmpProject([MEM('k')])
-  knownCwds.set(a, Date.now())
-  const agents = { list: () => { throw new Error('boom') } }
-  const collect = new Function('knownCwds', 'agents', 'cwdFromAgent', 'readDocSync', 'readMemoryFileMtime', 'MEMORY_FILE',
-    extractFn(INDEX_SRC, 'function collectProjects()') + '\nreturn collectProjects')(knownCwds, agents, () => undefined, readDocSync, readMemoryFileMtime, '.dsh-memory.json')
-  const out = collect()
+  known.set(a, Date.now())
+  const out = makeCollect(known, { list: () => { throw new Error('boom') } })()
   assert.equal(out.length, 1)
   assert.equal(out[0].cwd, a)
 })
 
 test('collectProjects：去重（末尾斜杠/反斜杠视为同一目录）', () => {
-  const knownCwds = new Map()
+  const known = new Map()
   const a = tmpProject([MEM('d')])
-  knownCwds.set(a, Date.now())
-  knownCwds.set(a + '\\', Date.now())
-  knownCwds.set(a + '/', Date.now())
-  const collect = new Function('knownCwds', 'agents', 'cwdFromAgent', 'readDocSync', 'readMemoryFileMtime', 'MEMORY_FILE',
-    extractFn(INDEX_SRC, 'function collectProjects()') + '\nreturn collectProjects')(knownCwds, { list: () => [] }, () => undefined, readDocSync, readMemoryFileMtime, '.dsh-memory.json')
-  assert.equal(collect().length, 1, '同一个目录的三种写法应合并成一条')
+  known.set(a, Date.now()); known.set(a + '\\', Date.now()); known.set(a + '/', Date.now())
+  assert.equal(makeCollect(known, { list: () => [] })().length, 1)
+})
+
+test('cleanRecentDirs：清掉盘符根与前缀式半截路径（D:/ 、D:/D、D:/DS）', () => {
+  const cleaned = cleanRecentDirs(['D:/', 'D:/D', 'D:/DS', 'D:/DeepSeek', 'D:/DSH', 'C:\\', '', '   '])
+  assert.deepEqual(cleaned.slice().sort(), ['D:/DSH', 'D:/DeepSeek'].sort(), '只留两条真实目录')
+})
+
+test('cleanRecentDirs：保留不相关目录、去重、幂等', () => {
+  const once = cleanRecentDirs(['D:/DeepSeek', 'D:/DeepSeek', 'E:/work/pm'])
+  assert.deepEqual(once.slice().sort(), ['D:/DeepSeek', 'E:/work/pm'].sort(), '去重且互不为前缀时都保留')
+  assert.deepEqual(cleanRecentDirs(once), once, '幂等：再清一次不变')
 })
 
 test('API action:projects 返回现有项目列表（真·api.js 路由）', async () => {
@@ -124,7 +120,6 @@ test('API action:projects 返回现有项目列表（真·api.js 路由）', asy
   const api = makeApi({ collectProjects: async () => [{ cwd: a, count: 1, updatedAt: 123, lastSeenAt: 456 }] })
   const r = await api.call({ action: 'projects' })
   assert.equal(r.ok, true)
-  assert.equal(r.projects.length, 1)
   assert.deepEqual(Object.keys(r.projects[0]).sort(), ['count', 'cwd', 'lastSeenAt', 'updatedAt'])
 })
 
@@ -143,17 +138,22 @@ test('接线：输入框回车 → submitDir（输入即加载；下拉选中项
   assert.match(CLIENT_SRC, /const submitDir = \(\) => \{[\s\S]{0,400}?const typed = String\(cwd \|\| ""\)\.trim\(\)/, '回车默认按"输入的目录"加载')
 })
 
-test('接线：下拉组件存在且可搜索；选中即加载并记入最近使用', () => {
-  assert.match(CLIENT_SRC, /className: "pm-ac"/, '要有下拉容器')
-  assert.match(CLIENT_SRC, /const dirFiltered = \(text\) => \{[\s\S]{0,300}?includes\(q\)/, '输入即过滤（子串匹配）')
-  assert.match(CLIENT_SRC, /const pickDir = \(c\) => \{ setCwd\(c\); setDirOpen\(false\); setDirHi\(-1\); rememberDir\(c\); load\(c\);? \}/, '选中 → 填框 + 关下拉 + 记最近 + 立即加载')
-  assert.match(CLIENT_SRC, /onMouseDown: \(e\) => \{ e\.preventDefault\(\); pickDir\(p\.cwd\); \}/, '鼠标点选（用 mousedown 抢在 blur 前）')
-  assert.match(CLIENT_SRC, /onFocus: \(\) => \{ loadDirs\(\); setDirOpen\(true\); \}/, '聚焦时拉取现有项目')
+test('接线（用户反馈修正）：load 里不记历史；只在挂载时自动加载；提交才记录', () => {
+  const loadBlock = CLIENT_SRC.slice(CLIENT_SRC.indexOf('const load = useCallback('), CLIENT_SRC.indexOf('// —— 项目目录 Typeahead 助手'))
+  assert.ok(!/rememberDir\(/.test(loadBlock), 'load 里不得记历史（否则每敲一个字都进历史）')
+  assert.ok(!/\}, \[cwd, load\]\)/.test(CLIENT_SRC), '不能再有"cwd 一变就自动加载"的 effect')
+  assert.match(CLIENT_SRC, /useEffect\(\(\) => \{ load\(cwd\); \}, \[\]\)/, '只在挂载时加载一次默认目录')
+  const submitBlock = CLIENT_SRC.slice(CLIENT_SRC.indexOf('const submitDir = ('), CLIENT_SRC.indexOf('const exportJson'))
+  assert.match(submitBlock, /rememberDir\(typed\)/, '回车/保存 提交后才记历史')
+  assert.match(CLIENT_SRC, /const pickDir = \(c\) => \{ setCwd\(c\); setDirOpen\(false\); setDirHi\(-1\); rememberDir\(c\); load\(c\);? \}/, '下拉选择也算明确提交 → 记历史并加载')
 })
 
-test('接线：现有项目来自宿主 action:projects + 本地最近使用，且"保存"按钮等同回车', () => {
+test('接线：下拉读取历史时先清理；组件与交互齐备', () => {
+  assert.match(CLIENT_SRC, /cleanRecentDirs\(JSON\.parse\(localStorage\.getItem\("pm\.recentDirs"\)/, '读历史时先 cleanRecentDirs 清理')
+  assert.match(CLIENT_SRC, /className: "pm-ac"/, '要有下拉容器')
+  assert.match(CLIENT_SRC, /const dirFiltered = \(text\) => \{[\s\S]{0,300}?includes\(q\)/, '输入即过滤（子串匹配）')
+  assert.match(CLIENT_SRC, /onMouseDown: \(e\) => \{ e\.preventDefault\(\); pickDir\(p\.cwd\); \}/, '鼠标点选（mousedown 抢在 blur 前）')
+  assert.match(CLIENT_SRC, /onFocus: \(\) => \{ loadDirs\(\); setDirOpen\(true\); \}/, '聚焦时拉取现有项目')
   assert.match(CLIENT_SRC, /fetchJson\("\/projects", \{ method: "POST", body: JSON\.stringify\(\{ action: "projects" \}\) \}\)/, '要去宿主取现有项目')
-  assert.match(CLIENT_SRC, /localStorage\.getItem\("pm\.recentDirs"\)/, '要合并本地最近使用')
   assert.match(CLIENT_SRC, /h\("button", \{ className: "pm-save", onClick: submitDir \}, "保存"\)/, '"保存"按钮走同一条提交逻辑')
-  assert.match(CLIENT_SRC, /if \(r\.ok\) rememberDir\(c\);/, '成功加载过就记入最近使用')
 })
