@@ -224,10 +224,15 @@ test('搜索：图标按钮常驻；点它**覆盖式**滑出输入框（不挤�
   assert.match(CLIENT_SRC, /h\("div", \{ key: "search", className: "pm-search" \}/, '渲染成 pm-search 容器（按钮 + 覆盖输入框）')
 })
 
-test('搜索框要够宽（用户反馈：展开太短看不见）', () => {
-  assert.match(CLIENT_SRC, /\.pm-search-box input\{width:300px;max-width:52vw/, '输入框宽 300px（小窗口按 52vw 收缩）')
+test('搜索框够宽 + 展开后与按钮同色无缝（用户反馈：太短看不见 / 颜色突兀）', () => {
+  assert.match(CLIENT_SRC, /\.pm-search-box input\{width:268px;max-width:48vw/, '输入框宽 268px（小窗口按 48vw 收缩）')
   assert.match(CLIENT_SRC, /\.pm-search-box\{[^}]*box-shadow:0 8px 24px/, '覆盖层要有阴影，和底下的控件区分开')
-  assert.match(CLIENT_SRC, /@keyframes pm-search-in\{from\{opacity:0;transform:scaleX\(\.85\)/, '要有滑出/展开动画')
+  assert.match(CLIENT_SRC, /@keyframes pm-search-in\{from\{opacity:0;transform:scaleX\(\.9\)/, '要有滑出/展开动画')
+  // 同色无缝：按钮底色与覆盖层一致（#1a1a1a）；展开态按钮不换色，只切边框色
+  assert.match(CLIENT_SRC, /\.pm-search-btn\{[^}]*background:#1a1a1a/, '按钮底色 = 覆盖层底色（不再突兀）')
+  assert.match(CLIENT_SRC, /\.pm-search-btn\.on\{background:#1a1a1a;color:#8f8f8f;border-color:#4a4a4a/, '展开态按钮与覆盖层同色同边框')
+  assert.match(CLIENT_SRC, /className: "pm-search-lens"/, '覆盖层自带图标（与按钮图标同位同色 = "按钮变成输入框"）')
+  assert.match(CLIENT_SRC, /\.pm-search-box\{[^}]*padding:0 10px 0 34px/, '覆盖层左侧留图标位（内容不压图标）')
 })
 
 test('搜索收起方式：空词再点按钮收起 / 点外部收起（有词则保留）', () => {
