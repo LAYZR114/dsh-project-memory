@@ -73,7 +73,7 @@ test('UI 接线：确认后才固化顺序（含 sanity 体检 + 回读校验门
   assert.match(fn, /checkSanity\(next, memories, ids\)/, '应先过 sanity 体检（与拖动排序同一道关）')
   assert.match(fn, /persist\(next\)/, '应走与拖动排序同一条写盘路径')
   assert.match(fn, /r\.verified/, '必须以服务端回读校验结果为准')
-  assert.match(fn, /load\(cwd\)/, '校验不通过时应重新载入磁盘真实顺序（不谎报成功）')
+  assert.match(fn, /load\(cwd, \{ keepMsg: true \}\)/, '校验不通过时应重新载入磁盘真实顺序，并保留"未生效"提示（keepMsg）')
   assert.match(fn, /setSort\("default"\)/, '校验通过后才切回默认（手动）模式')
   assert.match(fn, /setUndoOrder\(prev\)/, '应记录保存前顺序以供撤销')
   assert.match(fn, /setSortDone\(/, '校验通过后应弹出成功告知弹窗')
