@@ -183,18 +183,52 @@ test('布局：顶部按钮成组右对齐；目录/保存/统计并成一条工
   assert.match(CLIENT_SRC, /className: "pm-top-actions"/, '导出/导入/新增 要成组（右对齐），不再散落')
   assert.match(CLIENT_SRC, /className: "pm-toolbar"/, '目录输入+保存+统计要在同一条工具条里')
   assert.match(CLIENT_SRC, /\.pm-toolbar\{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px\}/, '工具条样式必须存在')
-  assert.match(CLIENT_SRC, /\.pm-stat-recent\{max-width:330px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\}/, '"最近：…" 必须单行省略，不能换行撑高')
+  assert.match(CLIENT_SRC, /\.pm-stat-recent\{[^}]*max-width:330px[^}]*text-overflow:ellipsis[^}]*white-space:nowrap/, '"最近：…" 必须单行省略，不能换行撑高')
   assert.ok(!/h\("div", \{ className: "pm-stats" \}/.test(CLIENT_SRC), '不再有独立的 pm-stats 块（已并入工具条）')
-  assert.match(CLIENT_SRC, /h\("span", \{ className: "pm-stat" \}, "记忆", h\("b", null, memories\.length\)\)/, '记忆数要作为工具条里的小徽标')
+  assert.match(CLIENT_SRC, /h\("span", \{ className: "pm-stat", title: "当前项目的记忆条数" \}, "记忆", h\("b", null, memories\.length\)\)/, '记忆数要作为工具条里的小徽标')
+  // 用户要求：保存 + 「记忆 N」胶囊紧跟输入框（往左移，与目录搜索框挨着）
+  const toolbar = CLIENT_SRC.slice(CLIENT_SRC.indexOf('className: "pm-toolbar"'), CLIENT_SRC.indexOf('className: "pm-bar"'))
+  const iSave = toolbar.indexOf('className: "pm-save"')
+  const iStat = toolbar.indexOf('记忆", h("b"')
+  const iRecent = toolbar.indexOf('pm-stat-recent')
+  assert.ok(iSave > 0 && iStat > iSave && iRecent > iStat, '顺序必须是 输入框 → 保存 → 记忆 N → 最近（胶囊紧贴输入框）')
+  assert.ok(!/marginLeft: "auto"/.test(toolbar), '保存/记忆胶囊不得再用 margin-left:auto 推到右边')
 })
 
 test('布局：标签页/搜索/排序同一行；间距收紧', () => {
   const bar = CLIENT_SRC.slice(CLIENT_SRC.indexOf('className: "pm-bar"'), CLIENT_SRC.indexOf('h("ul", { className: "pm-list"'))
   assert.match(bar, /pm-tab/, '标签页在 pm-bar 里')
-  assert.match(bar, /pm-search/, '搜索在 pm-bar 里')
+  assert.match(bar, /pm-search-btn|pm-search-inline/, '搜索在 pm-bar 里')
   assert.match(bar, /value: sort/, '排序下拉也在 pm-bar 里（不再单独占一行）')
   assert.match(CLIENT_SRC, /\.pm-bar\{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:nowrap\}/, 'pm-bar 不换行，避免把排序挤到第二行')
   assert.match(CLIENT_SRC, /\.pm-top\{[^}]*margin-bottom:8px\}/, '顶部间距收紧到 8px')
   assert.match(CLIENT_SRC, /\.pm-list\{[^}]*gap:8px/, '列表间距收紧到 8px')
   assert.match(CLIENT_SRC, /\.pm-group\{[^}]*padding:8px 12px/, '分组头 padding 收紧')
+})
+
+// ===== 用户第二轮 UI 微调（2026-09-11）：筛选横排 / 搜索可展开 / 排序压窄 / 胶囊左移 =====
+
+test('筛选胶囊：文字必须单行横排（不再竖排）', () => {
+  assert.match(CLIENT_SRC, /\.pm-tab\{[^}]*white-space:nowrap[^}]*flex:0 0 auto[^}]*word-break:keep-all/, 'pm-tab 必须 nowrap + 不压缩（否则"全部"会竖排）')
+})
+
+test('搜索：默认是图标按钮，点击才向右展开输入框', () => {
+  assert.match(CLIENT_SRC, /const \[searchOpen, setSearchOpen\] = useState\(false\)/, '要有 searchOpen 状态（默认收起）')
+  assert.match(CLIENT_SRC, /searchOpen\s*\?\s*h\("input", \{\s*className: "pm-search-inline"/, '展开时才渲染输入框')
+  assert.match(CLIENT_SRC, /className: "pm-search-btn"/, '收起时是图标按钮')
+  assert.match(CLIENT_SRC, /onClick: \(\) => setSearchOpen\(true\)/, '点图标按钮展开')
+  assert.match(CLIENT_SRC, /\.pm-search-inline\{[^}]*animation:pm-search-in/, '展开要有向右展开的动画')
+  // 位置：在「已归档」胶囊右边（= 四个 tab 之后）
+  const bar = CLIENT_SRC.slice(CLIENT_SRC.indexOf('className: "pm-bar"'), CLIENT_SRC.indexOf('h("ul", { className: "pm-list"'))
+  const iTabs = bar.indexOf('"all", "active", "candidate", "archived"')
+  const iSearch = bar.indexOf('searchOpen')
+  assert.ok(iTabs > 0 && iSearch > iTabs, '搜索控件必须排在四个筛选胶囊之后')
+  assert.match(bar, /if \(e\.key === "Escape"\) \{ if \(!q\) setSearchOpen\(false\); else setQ\(""\); \}/, 'Esc：先清词、空词时收起')
+})
+
+test('排序下拉：文案不减、宽度压窄（全角冒号 + 缩短选项文案 + max-width）', () => {
+  assert.match(CLIENT_SRC, /\.pm-sort\{flex:0 0 auto;max-width:190px\}/, '排序下拉要限宽')
+  for (const label of ['排序：默认', '排序：从新到旧', '排序：重要等级高→低', '排序：自动注入多→少'])
+    assert.ok(CLIENT_SRC.includes('"' + label + '"'), '选项文案必须保留（不删字）：' + label)
+  assert.match(CLIENT_SRC, /className: "pm-select pm-sort"/, '排序下拉要带 pm-sort 类')
 })

@@ -59,6 +59,8 @@ node tools/smoke-apply.mjs       # 25 项 apply() 冒烟（含"全新安装 = 0 
 
 ## 6. 变更记录
 
+- 2026-09-11：**设置页第二轮 UI 微调**（用户逐条要求）：① 筛选胶囊文字**单行横排**（`pm-tab` 加 `white-space:nowrap;flex:0 0 auto;word-break:keep-all`）；② 保存 + 「记忆 N」**左移贴近目录输入框**（工具条顺序 输入→保存→记忆→最近，去掉 `margin-left:auto`）；③ 搜索改为**默认收起的图标按钮**（在「已归档」右侧，Feather 放大镜），点击**向右展开**输入框（`pm-search-in` 动画；Esc 先清词、空词收起）；④ 排序下拉**文案不减**（全角冒号 + `max-width:190px`）压窄。新增 4 项断言（含"顺序正确""搜索在四个胶囊之后""文案必须保留"），全量 **93/93** 通过。
+
 - 2026-09-11：**撤销「选择目录」+ 设置页布局紧凑化**（用户决定）：① 该按钮在桌面端拿不到任何可用的目录选择能力（宿主 `directoryPicker.capability()` 只给 browse 描述、无 `list` 实现；客户端 `uiWorkspace` 取不到/调用失败），按用户要求**整体撤销**——客户端按钮/handler/样式、宿主 `pickDirectory`/`browseDirectories`/`directoryPickerCapability`、API 动作 `pickdir`/`browse` 全部删除，不留死代码；切目录仍是"输入框回车 / 下拉选择"。② 设置页重排为三行（标题+按钮组 / 工具条[目录+保存+统计] / 操作条[标签页+搜索+排序]），统计并入工具条、"最近"单行省略，间距收紧。测试 98→90（删掉 12 项 picker 用例，新增 4 项"已移除/布局紧凑"断言），全量 **90/90** 通过。
 
 - 2026-09-11：**「选择目录」三级兜底 + 惰性取服务**（用户实测："还是提示这个"——说明 apply 时抓的 `uiWorkspace` 是空的/晚注册）：① `getWsPicker()` **每次点击惰性重取** `clientCtx.get('uiWorkspace')`（apply 只记下 ctx，不再依赖快照）；② 宿主 `pickDirectory()` 抽出 `directoryPickerCapability()` 共用；③ 新增宿主 `browseDirectories(path)`（官方 browse 能力 `list()`）+ API 动作 **`action:'browse'`**；④ `browse-only` 时不再只提示，而是**弹出插件自带的文件夹浏览对话框**（面包屑可点回上级、点条目进子目录、"选这个文件夹"确认）。`test/dir-typeahead.test.mjs` 扩到 23 项，全量 **97/97** 通过。
