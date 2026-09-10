@@ -1,6 +1,7 @@
 # 🌟 北极星记忆（dsh-project-memory）· Project Memory Plugin for DeepSeek Harness
 
-> **版本**：0.1.0（测试版 / beta） · **许可证**：BSD-3-Clause · **类型**：DeepSeek Harness（DSH）插件 · **适配核心**：DSH **v0.1.2-rc 系**（web/desktop profile 通用）
+> **版本**：0.1.2 · **许可证**：BSD-3-Clause · **类型**：DeepSeek Harness（DSH）插件 · **适配核心**：DSH **v0.1.2-rc.1 ~ v0.1.5-rc.1**（web/desktop profile 通用）
+> **版本线**：📌 **自用稳定线 0.1.x**（面向旧核长期自用：只做 bugfix 与兼容补丁，不加新功能；追新特性走 0.2.x「新核线」，两条线同一包名、详见 [`VERSION-LINES.md`](./VERSION-LINES.md)）
 > **一句话**：让 AI 一直记住你的项目 —— 每轮带着你的习惯、改东西时自动提醒规矩、提到相关内容自动翻出来，重要记忆还能上锁防删。
 
 ---
@@ -150,7 +151,7 @@ node lib/scene.js    # scene.js selfTest（场景管线 31 断言）
 
 | 项 | 说明 |
 |---|---|
-| **适配核心版本** | DeepSeek Harness **v0.1.2-rc 系**（同代 rc/stable——`@deepseek-ai/dsh-tools >=0.0.1-rc <2` / `cordis >=4.0.0-rc <5` / `schemastery ^3.18`，见 package.json peerDependencies）；随核心快速适配（探测→退化→上报） |
+| **适配核心版本** | DeepSeek Harness **v0.1.2-rc.1 ~ v0.1.5-rc.1**（同代 rc——`@deepseek-ai/dsh-tools >=0.1.5-rc.1` / `@deepseek-ai/cordis >=4.0.0-rc <5`，见 package.json peerDependencies）；随核心快速适配（探测→退化→上报）。**0.1.5-rc.1 适配核对**：29 项 API 静态核对全通过 + apply() 冒烟（含"无 webServer 的桌面壳"场景）全通过 |
 | **Profile** | `web`（桌面端/网页 profile 均以 `--profile <名字>` 指定；本插件 profile 无关——纯平台插件，web/desktop 通用；实测 `profiles/web`） |
 | **平台** | 宿主 `node` + 客户端 `web`（设置页 UI）——零构建依赖 |
 
@@ -204,7 +205,7 @@ BSD-3-Clause（详见 LICENSE）。
 # English README
 
 > **Polaris Memory (dsh-project-memory)** — Project Memory Plugin for DeepSeek Harness
-> **Version**: 0.1.0 (beta) · **License**: BSD-3-Clause · **Core**: DSH v0.1.2-rc family (web/desktop profiles)
+> **Version**: 0.1.2 · **License**: BSD-3-Clause · **Core**: DSH v0.1.2-rc.1 ~ v0.1.5-rc.1 (web/desktop profiles)
 
 ## For Developers (Professional)
 
