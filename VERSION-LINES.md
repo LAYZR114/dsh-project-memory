@@ -11,12 +11,12 @@
 | | **自用稳定线（legacy）** | **新核线（next）** |
 |---|---|---|
 | 包名 | `@dsh-external/dsh-project-memory` | 同左（同一包名） |
-| 版本 | **0.1.3** | **0.1.4** |
+| 版本 | **0.1.4** | **0.1.5** |
 | 目标核心 | DSH **0.1.2-rc.1** 起旧核（桌面端 2.0.5 等） | DSH **0.1.5-rc.1+**（桌面端 2.0.7 等） |
 | 定位 | 日常自用：以 bugfix 与兼容补丁为主 | 追新核：功能与 legacy 对等，另含核心适配 |
 | 工作目录 | `D:\DeepSeek\project-memory-bundle` | `D:\DeepSeek\polaris-next` |
-| git 分支 | `main`（tag `v0.1.3`） | `next/0.1.x`（tag `v0.1.4`） |
-| 交付包 | `dsh-external-dsh-project-memory-0.1.3.tgz` | `dsh-external-dsh-project-memory-0.1.4.tgz` |
+| git 分支 | `main`（tag `v0.1.4`） | `next/0.1.x`（tag `v0.1.5`） |
+| 交付包 | `dsh-external-dsh-project-memory-0.1.4.tgz` | `dsh-external-dsh-project-memory-0.1.5.tgz` |
 
 两线**共享同一套数据格式**：记忆文件仍是各项目目录下的 `.dsh-memory.json`（store v2/v3）。
 所以来回切换版本线**不会丢记忆、不需要迁移**。两线代码当前**功能对等**，差异只在"目标核心"与版本号。
@@ -58,3 +58,4 @@ cmd /c mklink /J "C:\Users\35211\.dsh\profiles\desktop\node_modules\@dsh-externa
 - 2026-09-10：分版落地。legacy 冻结于 0.1.2（含 LLM 精排 text-delta 修复、软依赖挂载时机 hotfix）；next 由 legacy 克隆起步，目标核心 DSH 0.1.5-rc.1+。
 - 2026-09-10：next 版本号 0.2.0 → 0.1.3（纯核心适配，不升大版本）。
 - 2026-09-10：**新增设置页「保存排序」**（选任一自动排序 → 一键固化为「默认（手动）顺序」；默认模式不显示按钮；保存后 10 秒内可撤销；与拖动排序同一条写盘路径 + sanity 体检）。两线同步落地：**legacy 0.1.3 / next 0.1.4**；新增 `test/client-save-sort.test.mjs` 回归（8 项）。
+- 2026-09-10：**修「手动顺序存不住」真因**（用户实测反馈"保存排序没反应"）：`readDoc` 每次读盘都 `.sort(byNewest)`，写进去的手动/保存顺序一读就被重排（**拖动排序也一直因此无效**）。修法：①`readDoc(cwd, {keepOrder:true})` 保留文件真实顺序（默认仍按最新，内部消费方行为不变）②设置页 `/list` 用 keepOrder ③`/save` 写盘后**回读校验**并返回 `verified/count/mismatchAt`，客户端只在 verified 时报成功。交互按用户要求加：**二次确认弹窗**（确认后才写盘）+ **成功告知弹窗 2 秒自动关闭**。版本：**legacy 0.1.4 / next 0.1.5**；新增 `test/save-order-persist.test.mjs`（6 项，跑真 readDoc 与真 api 路由）+ 客户端接线测试扩到 8 项；全量 46 项通过。

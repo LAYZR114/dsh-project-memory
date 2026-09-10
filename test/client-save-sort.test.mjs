@@ -60,13 +60,30 @@ test('UI 接线：按钮只在自动排序时出现（默认/手动模式不显�
   assert.match(SRC, /"保存排序"/, '按钮文案应为「保存排序」')
 })
 
-test('UI 接线：点击后固化顺序 → 回到默认（手动）→ 开 10 秒撤销窗口', () => {
-  const fn = SRC.slice(SRC.indexOf('const saveSortedOrder'), SRC.indexOf('const undoSortedOrder'))
-  assert.match(fn, /sortList\(memories, sort\)/, '应对整个列表应用当前排序规则')
+// 流程：点按钮 → 弹二次确认（不写盘）→ 确认后写盘 → 服务端回读校验 → 成功弹窗（2 秒自动关）
+test('UI 接线：点「保存排序」只弹二次确认，不写盘', () => {
+  const fn = SRC.slice(SRC.indexOf('const saveSortedOrder'), SRC.indexOf('const doSaveSortedOrder'))
+  assert.match(fn, /setSortConfirm\(/, '应打开二次确认弹窗')
+  assert.ok(!/persist\(/.test(fn), '确认之前绝不能写盘')
+})
+
+test('UI 接线：确认后才固化顺序（含 sanity 体检 + 回读校验门槛）', () => {
+  const fn = SRC.slice(SRC.indexOf('const doSaveSortedOrder'), SRC.indexOf('const undoSortedOrder'))
+  assert.match(fn, /sortList\(memories, mode\)/, '应对整个列表应用当前排序规则')
   assert.match(fn, /checkSanity\(next, memories, ids\)/, '应先过 sanity 体检（与拖动排序同一道关）')
   assert.match(fn, /persist\(next\)/, '应走与拖动排序同一条写盘路径')
-  assert.match(fn, /setSort\("default"\)/, '保存后应切回默认（手动）模式')
+  assert.match(fn, /r\.verified/, '必须以服务端回读校验结果为准')
+  assert.match(fn, /load\(cwd\)/, '校验不通过时应重新载入磁盘真实顺序（不谎报成功）')
+  assert.match(fn, /setSort\("default"\)/, '校验通过后才切回默认（手动）模式')
   assert.match(fn, /setUndoOrder\(prev\)/, '应记录保存前顺序以供撤销')
+  assert.match(fn, /setSortDone\(/, '校验通过后应弹出成功告知弹窗')
+})
+
+test('UI 接线：二次确认与成功告知弹窗都在，且成功弹窗 2 秒自动关闭', () => {
+  assert.match(SRC, /确认保存排序/, '应有二次确认弹窗标题')
+  assert.match(SRC, /确认保存/, '确认按钮文案')
+  assert.match(SRC, /已保存为默认顺序/, '应有成功告知弹窗')
+  assert.match(SRC, /setTimeout\(\(\) => setSortDone\(null\), 2000\)/, '成功弹窗应 2 秒后自动关闭')
 })
 
 test('UI 接线：撤销走同一路径，且 10 秒后自动失效', () => {
