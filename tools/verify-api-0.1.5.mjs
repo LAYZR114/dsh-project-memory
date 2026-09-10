@@ -1,9 +1,20 @@
 // 静态核对：北极星记忆插件用到的每个 DSH API，在 0.1.5-rc.1 源码里是否仍以预期形状存在。
-// 只读；不改任何文件。用法：node _verify_api_015.mjs
+// 只读；不改任何文件。用法：node tools/verify-api-0.1.5.mjs
 import fs from 'node:fs'
 import path from 'node:path'
 
-const NEW = 'D:/DeepSeek/_src_inspect/dsh-v0.1.5-rc.1/deepseek-harness-dsh-v0.1.5-rc.1'
+// 需要解压出来的核心源码树；可用环境变量 DSH_SRC_TREE 覆盖。
+// 树不在时**跳过（exit 0）**——2026-09-11 起磁盘上默认不再保留该树（它含 AGENTS.md，
+// 一读就触发 DSH 仓库规范注入，白烧上下文）。重新准备方式见 VERSION-LINES.md §5。
+const NEW = process.env.DSH_SRC_TREE
+  ?? 'D:/DeepSeek/_src_inspect/dsh-v0.1.5-rc.1/deepseek-harness-dsh-v0.1.5-rc.1'
+if (!fs.existsSync(NEW)) {
+  console.log('=== 静态 API 核对：跳过 ===')
+  console.log('  未找到核心源码树: ' + NEW)
+  console.log('  准备方式：把 D:\\DeepSeek\\deepseek-harness-dsh-v0.1.5-rc.1.zip 解压到')
+  console.log('           D:\\DeepSeek\\_src_inspect\\ ，或设 DSH_SRC_TREE 指向已有源码树。')
+  process.exit(0)
+}
 const read = (rel) => fs.readFileSync(path.join(NEW, rel), 'utf8')
 
 const checks = [
