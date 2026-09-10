@@ -160,9 +160,14 @@ test('接线：下拉读取历史时先清理；组件与交互齐备', () => {
 
 // ===== 「选择目录」按钮（用户 2026-09-11 需求）：走官方 directoryPicker =====
 
-/** 真·pickDirectory（index.js 抽取；ctx/noteCwd 注入） */
-const makePickDirectory = (ctx, noteCwd = () => {}) => new Function('ctx', 'noteCwd',
-  extractFn(INDEX_SRC, 'async function pickDirectory(') + '\nreturn pickDirectory')(ctx, noteCwd)
+/** 真·目录选择三件套（index.js 抽取；ctx/noteCwd 注入）。
+ *  pickDirectory 现在复用同级的 directoryPickerCapability()，两者必须一起抽出来。 */
+const makeDirPicker = (ctx, noteCwd = () => {}) => new Function('ctx', 'noteCwd',
+  extractFn(INDEX_SRC, 'function directoryPickerCapability(') + '\n'
+  + extractFn(INDEX_SRC, 'async function pickDirectory(') + '\n'
+  + extractFn(INDEX_SRC, 'async function browseDirectories(') + '\n'
+  + 'return { pickDirectory, browseDirectories }')(ctx, noteCwd)
+const makePickDirectory = (ctx, noteCwd = () => {}) => makeDirPicker(ctx, noteCwd).pickDirectory
 
 test('pickDirectory：原生能力 → pick() 返回路径即成功，并记入 knownCwds', async () => {
   const noted = []
@@ -188,6 +193,25 @@ test('pickDirectory：服务缺失 / capability 抛错 / pick 抛错 → 各自�
   assert.match((await throwing()).error, /boom-pick/)
 })
 
+test('browseDirectories：browse 能力按路径列目录（兜底浏览对话框的数据源）', async () => {
+  const listing = { path: 'D:/DeepSeek', home: 'C:/Users/x', crumbs: [], entries: [{ name: 'a', path: 'D:/DeepSeek/a', hidden: false }], truncated: false }
+  let asked = null
+  const { browseDirectories } = makeDirPicker({ get: () => ({ capability: () => ({ kind: 'browse', list: async (p) => { asked = p; return listing } }) }) })
+  assert.deepEqual(await browseDirectories('D:/DeepSeek'), { ok: true, listing })
+  assert.equal(asked, 'D:/DeepSeek', '要把目标路径传给官方 list()')
+  assert.deepEqual(await browseDirectories(undefined), { ok: true, listing }, '不给路径 → 用家目录')
+  assert.equal(asked, undefined)
+})
+
+test('browseDirectories：非 browse 能力 / list 抛错 / 返回不合法 → 如实报错', async () => {
+  const nativeOnly = makeDirPicker({ get: () => ({ capability: () => ({ kind: 'native', pick: async () => null }) }) })
+  assert.match((await nativeOnly.browseDirectories('D:/')).error, /browse unavailable/)
+  const throwing = makeDirPicker({ get: () => ({ capability: () => ({ kind: 'browse', list: async () => { throw new Error('denied') } }) }) })
+  assert.match((await throwing.browseDirectories('C:/Windows')).error, /denied/)
+  const bad = makeDirPicker({ get: () => ({ capability: () => ({ kind: 'browse', list: async () => ({}) }) }) })
+  assert.match((await bad.browseDirectories('D:/')).error, /invalid listing/)
+})
+
 test('API action:pickdir 透传宿主结果（成功/取消两种）', async () => {
   const okApi = makeApi({ pickDirectory: async () => ({ ok: true, cwd: 'D:/DeepSeek' }) })
   assert.deepEqual(await okApi.call({ action: 'pickdir' }), { ok: true, cwd: 'D:/DeepSeek' })
@@ -201,20 +225,29 @@ test('API action:pickdir 在 pickDirectory 缺失时安全返回错误（不 500
   assert.match(r.error, /picker unavailable/)
 })
 
-test('接线：「选择目录」按钮与「保存」同款同尺寸，选中后切目录并加载；取消静默、无原生能力如实提示', () => {
+test('接线：「选择目录」按钮与「保存」同款同尺寸，选中后切目录并加载；取消静默、无原生能力转自带浏览', () => {
   assert.match(CLIENT_SRC, /className: "pm-save pm-pick", onClick: pickFolder/, '按钮必须与「保存」同款（pm-save）并绑到 pickFolder')
   assert.match(CLIENT_SRC, /\.pm-pick\{display:inline-flex;align-items:center;flex:none;padding:8px 18px;font-size:13px\}/, '尺寸要与 .pm-save 一致（同 padding/字号）')
   const block = CLIENT_SRC.slice(CLIENT_SRC.indexOf('const pickFolder = ('), CLIENT_SRC.indexOf('const persist = (next)'))
   assert.match(block, /action: "pickdir"/, '宿主退回路径要调 action:pickdir')
   assert.match(block, /setCwd\(p\);[\s\S]{0,200}?rememberDir\(p\);[\s\S]{0,200}?load\(p\);/, '选中 → 填框 + 记历史 + 立即加载')
   assert.match(block, /err === "cancelled"\) \{ setMsg\(""\); return; \}/, '取消：静默不打扰')
-  assert.match(block, /err === "browse-only"\)/, '无原生对话框：如实提示退回手输/下拉')
+  assert.match(block, /err === "browse-only" \|\| err === "picker unavailable"\)[\s\S]{0,200}?openBrowser\(cwd\);/, '没有系统对话框 → 打开自带的文件夹浏览对话框')
 })
 
-test('接线：优先用客户端官方服务 uiWorkspace.pickDirectory()（应用自带的选文件夹对话框）', () => {
+test('接线：优先用客户端官方服务 uiWorkspace.pickDirectory()（惰性取，服务可能晚注册）', () => {
   assert.match(CLIENT_SRC, /let wsPicker;/, '要有客户端 picker 的模块级引用（软依赖）')
-  assert.match(CLIENT_SRC, /wsPicker = \(typeof ctx\.get === "function"\) \? ctx\.get\("uiWorkspace"\) : undefined;/, 'apply 里用 ctx.get 探测 uiWorkspace（不用硬 inject，缺了也能跑）')
-  assert.match(CLIENT_SRC, /if \(wsPicker && typeof wsPicker\.pickDirectory === "function"\)/, '要优先走 uiWorkspace.pickDirectory()')
+  assert.match(CLIENT_SRC, /clientCtx = ctx;/, 'apply 里要记下客户端 ctx（供惰性重取服务）')
+  assert.match(CLIENT_SRC, /const getWsPicker = \(\) => \{[\s\S]{0,400}?clientCtx\.get\("uiWorkspace"\)/, 'getWsPicker：每次点击惰性重取 uiWorkspace')
+  assert.match(CLIENT_SRC, /const ws = getWsPicker\(\);/, 'pickFolder 要用惰性取的 ws（不是 apply 时的快照）')
   assert.match(CLIENT_SRC, /\.then\(\(p\) => \{ if \(!finish\(p\)\) setMsg\(""\); \}\)/, '返回 null（取消）时静默')
   assert.match(CLIENT_SRC, /\.catch\(\(\) => pickFolderViaHost\(finish\)\)/, 'uiWorkspace 不可用/抛错 → 退回宿主原生路径')
+})
+
+test('接线：自带"选择文件夹"浏览对话框（browse 能力兜底）', () => {
+  assert.match(CLIENT_SRC, /className: "pm-confirm pm-browse"/, '要有自带浏览对话框')
+  assert.match(CLIENT_SRC, /action: "browse", path: p/, '要调宿主 action:browse 列目录')
+  assert.match(CLIENT_SRC, /onClick: \(\) => browseTo\(en\.path\)/, '点子目录进入下一层')
+  assert.match(CLIENT_SRC, /\(browse\.listing\.crumbs \|\| \[\]\)\.map/, '要有面包屑（可点回上级）')
+  assert.match(CLIENT_SRC, /"选这个文件夹"/, '要有"选这个文件夹"按钮')
 })
