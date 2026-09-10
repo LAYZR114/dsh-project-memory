@@ -79,11 +79,11 @@ test('UI 接线：确认后才固化顺序（含 sanity 体检 + 回读校验门
   assert.match(fn, /setSortDone\(/, '校验通过后应弹出成功告知弹窗')
 })
 
-test('UI 接线：二次确认与成功告知弹窗都在，且成功弹窗 2 秒自动关闭', () => {
+test('UI 接线：二次确认与成功告知弹窗都在，且成功弹窗 3 秒自动关闭', () => {
   assert.match(SRC, /确认保存排序/, '应有二次确认弹窗标题')
   assert.match(SRC, /确认保存/, '确认按钮文案')
   assert.match(SRC, /已保存为默认顺序/, '应有成功告知弹窗')
-  assert.match(SRC, /setTimeout\(\(\) => setSortDone\(null\), 2000\)/, '成功弹窗应 2 秒后自动关闭')
+  assert.match(SRC, /setTimeout\(\(\) => setSortDone\(null\), 3000\)/, '成功弹窗应 3 秒后自动关闭')
 })
 
 test('UI 接线：撤销走同一路径，且 10 秒后自动失效', () => {
