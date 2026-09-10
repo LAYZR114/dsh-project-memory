@@ -178,3 +178,27 @@ test('模拟重启：反复读写后顺序稳定，且仍可再次显式改序',
   assert.equal(again.verified, true)
   assert.deepEqual(fileOrder(cwd), ['b', 'c', 'a'], '显式改序仍必须生效')
 })
+
+test('★耐久压测：20 轮「重启 + 各种写入」后手动顺序完全不变（回答"多次重启会不会又被扰乱"）', async () => {
+  const { readDoc, wt, cwd, api } = setup()
+  const manual = ['c', 'a', 'b']
+  await api.call({ action: 'save', cwd, memories: manual.map((id) => MEM(id)) })
+  assert.deepEqual(fileOrder(cwd), manual)
+
+  for (let cycle = 0; cycle < 20; cycle++) {
+    // 模拟一次「重启」：设置页重新加载 → 读到的必须是同一个手动顺序
+    const listed = await api.call({ action: 'list', cwd })
+    assert.deepEqual(listed.memories.map((m) => m.id).slice(0, 3), manual, '第 ' + cycle + ' 轮重启后顺序被扰动')
+    // 使用期间发生的各类写入，全部不得动顺序：
+    await recallHeatBump(readDoc, wt, cwd)                                  // ① 召回热度自增（最常见的写入）
+    const id = 'n' + cycle
+    const cur = readDocSync(cwd, '.dsh-memory.json', { keepOrder: true }).memories
+    await wt(cwd, [{ ...MEM(id), title: '新增 ' + cycle }, ...cur])          // ② 新增一条（置顶）
+    const after = readDocSync(cwd, '.dsh-memory.json', { keepOrder: true }).memories.filter((m) => m.id !== id)
+    await wt(cwd, after)                                                    // ③ 删掉它（其余位置不变）
+    await recallHeatBump(readDoc, wt, cwd)                                  // ④ 再召回一次
+    assert.deepEqual(fileOrder(cwd), manual, '第 ' + cycle + ' 轮写入后顺序漂移')
+  }
+  const finalListed = await api.call({ action: 'list', cwd })
+  assert.deepEqual(finalListed.memories.map((m) => m.id), manual, '20 轮之后设置页读到的仍是手动顺序')
+})
