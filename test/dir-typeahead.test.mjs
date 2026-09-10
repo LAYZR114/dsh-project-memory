@@ -198,7 +198,7 @@ test('布局：顶部按钮成组右对齐；目录/保存/统计并成一条工
 test('布局：标签页/搜索/排序同一行；间距收紧', () => {
   const bar = CLIENT_SRC.slice(CLIENT_SRC.indexOf('className: "pm-bar"'), CLIENT_SRC.indexOf('h("ul", { className: "pm-list"'))
   assert.match(bar, /pm-tab/, '标签页在 pm-bar 里')
-  assert.match(bar, /pm-search-btn|pm-search-inline/, '搜索在 pm-bar 里')
+  assert.match(bar, /pm-search-wrap/, '搜索在 pm-bar 里')
   assert.match(bar, /value: sort/, '排序下拉也在 pm-bar 里（不再单独占一行）')
   assert.match(CLIENT_SRC, /\.pm-bar\{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:nowrap\}/, 'pm-bar 不换行，避免把排序挤到第二行')
   assert.match(CLIENT_SRC, /\.pm-top\{[^}]*margin-bottom:8px\}/, '顶部间距收紧到 8px')
@@ -212,18 +212,42 @@ test('筛选胶囊：文字必须单行横排（不再竖排）', () => {
   assert.match(CLIENT_SRC, /\.pm-tab\{[^}]*white-space:nowrap[^}]*flex:0 0 auto[^}]*word-break:keep-all/, 'pm-tab 必须 nowrap + 不压缩（否则"全部"会竖排）')
 })
 
-test('搜索：默认是图标按钮，点击才向右展开输入框', () => {
+test('搜索：一体式胶囊 —— 图标常驻框内；收起时占位可点，展开后与输入框融合并保持显示', () => {
   assert.match(CLIENT_SRC, /const \[searchOpen, setSearchOpen\] = useState\(false\)/, '要有 searchOpen 状态（默认收起）')
-  assert.match(CLIENT_SRC, /searchOpen\s*\?\s*h\("input", \{\s*className: "pm-search-inline"/, '展开时才渲染输入框')
-  assert.match(CLIENT_SRC, /className: "pm-search-btn"/, '收起时是图标按钮')
-  assert.match(CLIENT_SRC, /onClick: \(\) => setSearchOpen\(true\)/, '点图标按钮展开')
-  assert.match(CLIENT_SRC, /\.pm-search-inline\{[^}]*animation:pm-search-in/, '展开要有向右展开的动画')
-  // 位置：在「已归档」胶囊右边（= 四个 tab 之后）
+  // 收起态：整个胶囊是按钮，内含常驻的放大镜 svg + 只读占位输入框
+  assert.match(CLIENT_SRC, /className: "pm-search-wrap" \+ \(q \? " on" : ""\), onClick: \(\) => setSearchOpen\(true\)/, '收起态：胶囊本身可点开')
+  assert.match(CLIENT_SRC, /readOnly: true, value: q, placeholder: "搜索"/, '收起态：占位 input 显示搜索词/提示')
+  assert.match(CLIENT_SRC, /const lens = h\("svg", \{/, '放大镜图标要抽成常量，两种状态**都在框内**（融合，不是两个控件）')
+  // 展开态：同一个 wrap 容器（图标仍常驻）+ 可编辑 input + 清空按钮
+  assert.match(CLIENT_SRC, /return h\("div", \{ key: "search", className: "pm-search-wrap" \}, \[\s*lens,/, '展开态复用同一个 wrap（图标常驻左侧）')
+  assert.match(CLIENT_SRC, /className: "pm-search-clear", title: "清空搜索"/, '展开态要有清空按钮')
+  assert.match(CLIENT_SRC, /\.pm-search-wrap\{flex:1 1 160px;min-width:120px/, '展开时搜索框要**足够宽**（用户反馈太窄会溢出）')
+  assert.match(CLIENT_SRC, /\.pm-search-wrap input\{flex:1;min-width:0;background:transparent;border:none/, '输入框要无边框融入胶囊（不再两个独立控件）')
+  assert.match(CLIENT_SRC, /\.pm-search-wrap:focus-within\{border-color:#555;cursor:text\}/, '聚焦时胶囊整体高亮')
+  // 位置：在「已归档」胶囊之后
   const bar = CLIENT_SRC.slice(CLIENT_SRC.indexOf('className: "pm-bar"'), CLIENT_SRC.indexOf('h("ul", { className: "pm-list"'))
   const iTabs = bar.indexOf('"all", "active", "candidate", "archived"')
-  const iSearch = bar.indexOf('searchOpen')
+  const iSearch = bar.indexOf('pm-search-wrap')
   assert.ok(iTabs > 0 && iSearch > iTabs, '搜索控件必须排在四个筛选胶囊之后')
   assert.match(bar, /if \(e\.key === "Escape"\) \{ if \(!q\) setSearchOpen\(false\); else setQ\(""\); \}/, 'Esc：先清词、空词时收起')
+})
+
+test('排序：搜索展开且已有词时让位（避免排序被挤窄）', () => {
+  assert.match(CLIENT_SRC, /\(filter !== "archived" && !\(searchOpen && q\)\) \? h\("span", \{ style: \{ marginLeft: "auto"/, '搜索生效时排序让位；空词/收起时排序回来')
+})
+
+test('搜索交互细节（参考成熟做法）：光标落位末尾 / ✕ 清空后回焦 / 有词绝不丢弃', () => {
+  assert.match(CLIENT_SRC, /const focusEnd = \(el\) => \{[\s\S]{0,200}?el\.setSelectionRange\(n, n\)/, '展开后光标要落在**末尾**（不能顶到开头/全选）')
+  assert.match(CLIENT_SRC, /ref: focusEnd,/, '展开的输入框要挂 focusEnd')
+  assert.match(CLIENT_SRC, /if \(inp\) inp\.focus\(\);/, '点 ✕ 清空后要**回焦**，用户不用再点一次')
+  assert.match(CLIENT_SRC, /if \(e\.key === "Escape"\) \{ if \(!q\) setSearchOpen\(false\); else setQ\(""\); \}/, 'Esc：有词先清词、空词才收起（绝不丢词）')
+  assert.match(CLIENT_SRC, /className: "pm-search-clear", title: "清空搜索"/, '✕ 只在有词时出现')
+})
+
+test('搜索框宽度：展开后必须够宽（用户反馈太窄会溢出）', () => {
+  assert.match(CLIENT_SRC, /\.pm-search-wrap\{flex:1 1 160px;min-width:120px/, '展开态最小宽度 120px、可伸展到 160px+')
+  assert.match(CLIENT_SRC, /\.pm-bar\{[^}]*flex-wrap:nowrap/, '不换行，宽度由 flex 分配')
+  assert.match(CLIENT_SRC, /\.pm-search-wrap input\{flex:1;min-width:0;/, '输入框吃满胶囊剩余宽度（文字可正常滚动显示）')
 })
 
 test('排序下拉：文案不减、宽度压窄（全角冒号 + 缩短选项文案 + max-width）', () => {
