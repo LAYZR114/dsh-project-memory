@@ -1,7 +1,7 @@
 # 🌟 北极星记忆（dsh-project-memory）· Project Memory Plugin for DeepSeek Harness
 
-> **版本**：0.2.0 · **许可证**：BSD-3-Clause · **类型**：DeepSeek Harness（DSH）插件 · **适配核心**：DSH **v0.1.5-rc.1 及更新**（web/desktop profile 通用；桌面端 2.0.7+）
-> **版本线**：🚀 **新核线 0.2.x**（跟随 DSH 最新核心；功能与自用稳定线 0.1.x 对等起步，此后可用新核 API 与新特性。两线同一包名、一个 profile 只装一条，详见 [`VERSION-LINES.md`](./VERSION-LINES.md)）
+> **版本**：0.1.3 · **许可证**：BSD-3-Clause · **类型**：DeepSeek Harness（DSH）插件 · **适配核心**：DSH **v0.1.5-rc.1 及更新**（web/desktop profile 通用；桌面端 2.0.7+）
+> **版本线**：🚀 **新核线 0.1.3**（跟随 DSH 最新核心；与自用稳定线 0.1.2 功能对等，仅差核心适配。两线同一包名、一个 profile 只装一条；**只有出现较大优化或新功能时才升 0.2.0**。详见 [`VERSION-LINES.md`](./VERSION-LINES.md)）
 > **一句话**：让 AI 一直记住你的项目 —— 每轮带着你的习惯、改东西时自动提醒规矩、提到相关内容自动翻出来，重要记忆还能上锁防删。
 
 ---

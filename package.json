@@ -1,7 +1,7 @@
 {
   "name": "@dsh-external/dsh-project-memory",
-  "version": "0.2.0",
-  "description": "项目记忆（Project Memory）：本地优先的项目记忆插件。每个项目一份 .dsh-memory.json（按 cwd 隔离），提供 memory_read/recall/write/update/delete 五工具、/memory 命令、设置页记忆管理 UI（编辑/删除/拖动排序/状态过滤/搜索/多项目切换），全部遵循'随核心快速适配'（适配器+探测-退化-上报）与'万物皆插件'（可独立挂载/停用）。【新核线 0.2.x】面向 DSH 0.1.5-rc.1 及更新的核心（桌面端 2.0.7 等）：功能与自用稳定线 0.1.x 对等起步，此后可使用新核 API 与新特性。",
+  "version": "0.1.3",
+  "description": "项目记忆（Project Memory）：本地优先的项目记忆插件。每个项目一份 .dsh-memory.json（按 cwd 隔离），提供 memory_read/recall/write/update/delete 五工具、/memory 命令、设置页记忆管理 UI（编辑/删除/拖动排序/状态过滤/搜索/多项目切换），全部遵循'随核心快速适配'（适配器+探测-退化-上报）与'万物皆插件'（可独立挂载/停用）。【新核线 0.1.3】面向 DSH 0.1.5-rc.1 及更新的核心（桌面端 2.0.7 等）：与自用稳定线 0.1.2 功能对等，仅差核心适配；同属 0.1.x 系列——**只有出现较大优化或新功能时才升 0.2.0**。",
   "private": false,
   "publishConfig": {
     "access": "public"
