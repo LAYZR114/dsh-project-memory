@@ -169,6 +169,26 @@ const makeDirPicker = (ctx, noteCwd = () => {}) => new Function('ctx', 'noteCwd'
   + 'return { pickDirectory, browseDirectories }')(ctx, noteCwd)
 const makePickDirectory = (ctx, noteCwd = () => {}) => makeDirPicker(ctx, noteCwd).pickDirectory
 
+test('pickDirectory：优先用宿主 remote 控制器（= 应用自带的系统文件夹对话框）', async () => {
+  const noted = []
+  // 控制器可用 → 直接返回路径
+  const withCtl = makePickDirectory({
+    get: (k) => (k === 'directoryPickerController' ? { pick: async () => 'D:/MIMO Code' } : undefined),
+  }, (c) => noted.push(c))
+  assert.deepEqual(await withCtl(), { ok: true, cwd: 'D:/MIMO Code' })
+  assert.deepEqual(noted, ['D:/MIMO Code'])
+  // 控制器返回 null（取消）→ cancelled，不再往下试
+  const cancel = makePickDirectory({ get: (k) => (k === 'directoryPickerController' ? { pick: async () => null } : undefined) })
+  assert.deepEqual(await cancel(), { ok: false, error: 'cancelled' })
+  // 控制器抛错 → 落到下一级（native pick）
+  const fallback = makePickDirectory({
+    get: (k) => (k === 'directoryPickerController'
+      ? { pick: async () => { throw new Error('no client') } }
+      : { capability: () => ({ kind: 'native', pick: async () => 'D:/DeepSeek' }) }),
+  })
+  assert.deepEqual(await fallback(), { ok: true, cwd: 'D:/DeepSeek' })
+})
+
 test('pickDirectory：原生能力 → pick() 返回路径即成功，并记入 knownCwds', async () => {
   const noted = []
   const pick = makePickDirectory({ get: () => ({ capability: () => ({ kind: 'native', pick: async () => 'D:/DeepSeek' }) }) }, (c) => noted.push(c))
@@ -232,7 +252,8 @@ test('接线：「选择目录」按钮与「保存」同款同尺寸，选中�
   assert.match(block, /action: "pickdir"/, '宿主退回路径要调 action:pickdir')
   assert.match(block, /setCwd\(p\);[\s\S]{0,200}?rememberDir\(p\);[\s\S]{0,200}?load\(p\);/, '选中 → 填框 + 记历史 + 立即加载')
   assert.match(block, /err === "cancelled"\) \{ setMsg\(""\); return; \}/, '取消：静默不打扰')
-  assert.match(block, /err === "browse-only" \|\| err === "picker unavailable"\)[\s\S]{0,200}?openBrowser\(cwd\);/, '没有系统对话框 → 打开自带的文件夹浏览对话框')
+  assert.match(block, /err === "browse-only" \|\| err === "picker unavailable"\)[\s\S]{0,600}?action: "browse", path: start \|\| undefined/, '没有系统对话框 → 先探测 browse 能力再决定弹不弹自家浏览框')
+  assert.match(block, /这个环境没有可用的目录选择器，请直接把路径粘进输入框/, '探测失败要直接告诉用户怎么手输（不弹空对话框）')
 })
 
 test('接线：优先用客户端官方服务 uiWorkspace.pickDirectory()（惰性取，服务可能晚注册）', () => {
