@@ -11,5 +11,8 @@ tmp-*
 # 本机数据
 .dsh-memory.json*
 *.dsh-memory.json
+*.dsh-memory.json.corrupt-*
+.diag/
+_smoke_*/
 profiles/
 node_modules/

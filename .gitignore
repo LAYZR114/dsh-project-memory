@@ -9,6 +9,13 @@ profiles/
 *.dsh-memory.json
 .dsh-memory.json
 .dsh-memory.json.*.bak
+# 损坏备份（读/解析失败时自动生成的原始字节副本，可能含全部记忆内容）
+.dsh-memory.json.corrupt-*
+*.dsh-memory.json.corrupt-*
+
+# 运行期诊断/临时目录
+.diag/
+_smoke_*/
 
 # 备份/历史快照（进仓库前删掉或留 docs/）
 lib/.bak-*/

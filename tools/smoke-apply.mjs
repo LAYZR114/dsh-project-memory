@@ -68,6 +68,27 @@ console.log('  name:', mod.name)
 console.log('  inject:', JSON.stringify(mod.inject))
 const assert = (cond, label) => { console.log((cond ? '  ✔ ' : '  ✘ ') + label); if (!cond) process.exitCode = 1 }
 
+console.log('\n=== 场景 0：全新安装（空目录）→ 必须 0 条记忆、不落任何文件 ===')
+const TMP0 = 'D:/DeepSeek/_smoke_fresh'
+fs.rmSync(TMP0, { recursive: true, force: true })
+fs.mkdirSync(TMP0, { recursive: true })
+const agent0 = fakeAgent(TMP0)
+const ctxF = makeCtx({ withWebServer: false })
+mod.apply(ctxF, {})
+assert(fs.readdirSync(TMP0).length === 0, 'apply() 后目录仍为空（无"播种"、无默认记忆文件）')
+const readF = ctxF._reg.tools.find(t => t.name === 'memory_read')
+const fresh = await readF.execute({}, { agent: agent0 })
+const nFresh = fresh && Array.isArray(fresh.memories) ? fresh.memories.length : -1
+assert(nFresh === 0, 'memory_read 返回 0 条（实际 ' + nFresh + '）')
+const statusF = ctxF._reg.commands.find(c => c.name === 'memory')
+const stF = await statusF.handler({ commandId: 'c0', agent: agent0, rawInput: 'status', attachments: [], signal: new AbortController().signal })
+const m0 = String(stF && stF.text || '').match(/总数:\s*(\d+)/)
+assert(m0 && m0[1] === '0', '/memory status 总数 0（实际 ' + (m0 ? m0[1] : '?') + '）')
+assert(fs.readdirSync(TMP0).length === 0, '只读操作全程不落盘（连空 store 也不写）')
+const recF = ctxF._reg.tools.find(t => t.name === 'memory_recall')
+const recR = await recF.execute({ query: '任意查询' }, { agent: agent0 })
+assert((recR && recR.recalled ? recR.recalled.length : -1) === 0, 'memory_recall 也召回 0 条')
+
 console.log('\n=== 场景 A：没有 webServer（桌面壳 webserver disabled）===')
 let ctxA
 try { ctxA = makeCtx({ withWebServer: false }); mod.apply(ctxA, { llmProvider: 'deepseek-official', llmModel: 'deepseek-v4-flash' }); assert(true, 'apply() 未抛错（说明 webServer 已不是硬依赖，fiber 不会 PENDING）') }
