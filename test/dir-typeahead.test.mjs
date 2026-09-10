@@ -201,11 +201,20 @@ test('API action:pickdir 在 pickDirectory 缺失时安全返回错误（不 500
   assert.match(r.error, /picker unavailable/)
 })
 
-test('接线：「选择目录」按钮存在，选中后切目录并加载；取消静默、无原生能力如实提示', () => {
-  assert.match(CLIENT_SRC, /className: "pm-btn pm-pick", onClick: pickFolder/, '要有「选择目录」按钮并绑到 pickFolder')
+test('接线：「选择目录」按钮与「保存」同款同尺寸，选中后切目录并加载；取消静默、无原生能力如实提示', () => {
+  assert.match(CLIENT_SRC, /className: "pm-save pm-pick", onClick: pickFolder/, '按钮必须与「保存」同款（pm-save）并绑到 pickFolder')
+  assert.match(CLIENT_SRC, /\.pm-pick\{display:inline-flex;align-items:center;flex:none;padding:8px 18px;font-size:13px\}/, '尺寸要与 .pm-save 一致（同 padding/字号）')
   const block = CLIENT_SRC.slice(CLIENT_SRC.indexOf('const pickFolder = ('), CLIENT_SRC.indexOf('const persist = (next)'))
-  assert.match(block, /action: "pickdir"/, '要调宿主 action:pickdir')
-  assert.match(block, /setCwd\(r\.cwd\);[\s\S]{0,200}?rememberDir\(r\.cwd\);[\s\S]{0,200}?load\(r\.cwd\);/, '选中 → 填框 + 记历史 + 立即加载')
+  assert.match(block, /action: "pickdir"/, '宿主退回路径要调 action:pickdir')
+  assert.match(block, /setCwd\(p\);[\s\S]{0,200}?rememberDir\(p\);[\s\S]{0,200}?load\(p\);/, '选中 → 填框 + 记历史 + 立即加载')
   assert.match(block, /err === "cancelled"\) \{ setMsg\(""\); return; \}/, '取消：静默不打扰')
   assert.match(block, /err === "browse-only"\)/, '无原生对话框：如实提示退回手输/下拉')
+})
+
+test('接线：优先用客户端官方服务 uiWorkspace.pickDirectory()（应用自带的选文件夹对话框）', () => {
+  assert.match(CLIENT_SRC, /let wsPicker;/, '要有客户端 picker 的模块级引用（软依赖）')
+  assert.match(CLIENT_SRC, /wsPicker = \(typeof ctx\.get === "function"\) \? ctx\.get\("uiWorkspace"\) : undefined;/, 'apply 里用 ctx.get 探测 uiWorkspace（不用硬 inject，缺了也能跑）')
+  assert.match(CLIENT_SRC, /if \(wsPicker && typeof wsPicker\.pickDirectory === "function"\)/, '要优先走 uiWorkspace.pickDirectory()')
+  assert.match(CLIENT_SRC, /\.then\(\(p\) => \{ if \(!finish\(p\)\) setMsg\(""\); \}\)/, '返回 null（取消）时静默')
+  assert.match(CLIENT_SRC, /\.catch\(\(\) => pickFolderViaHost\(finish\)\)/, 'uiWorkspace 不可用/抛错 → 退回宿主原生路径')
 })
