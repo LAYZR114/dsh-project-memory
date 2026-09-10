@@ -212,33 +212,39 @@ test('筛选胶囊：文字必须单行横排（不再竖排）', () => {
   assert.match(CLIENT_SRC, /\.pm-tab\{[^}]*white-space:nowrap[^}]*flex:0 0 auto[^}]*word-break:keep-all/, 'pm-tab 必须 nowrap + 不压缩（否则"全部"会竖排）')
 })
 
-test('搜索：**按钮常驻**，点击展开/再点收起；有词时按钮带徽标', () => {
+test('搜索：图标按钮常驻；点它**覆盖式**滑出输入框（不挤压别的控件）', () => {
   assert.match(CLIENT_SRC, /const \[searchOpen, setSearchOpen\] = useState\(false\)/, '要有 searchOpen 状态（默认收起）')
-  assert.match(CLIENT_SRC, /className: "pm-search-btn" \+ \(\(searchOpen \|\| q\) \? " on" : ""\)/, '按钮**两种状态都常驻**，展开或有词时高亮')
-  assert.match(CLIENT_SRC, /onClick: \(\) => setSearchOpen\(\(v\) => !v\)/, '点按钮 = 切换展开/收起（用户要求：再点收起）')
-  assert.match(CLIENT_SRC, /searchOpen \? h\("div", \{ key: "search-box", className: "pm-search-box" \}/, '展开时才多出一个输入框盒子（按钮不消失）')
-  assert.match(CLIENT_SRC, /q \? h\("span", \{ key: "badge", className: "pm-badge", title: q \}, q\) : null/, '有搜索词时按钮上要显示词的小徽标')
-  assert.match(CLIENT_SRC, /\.pm-search-btn\{[^}]*height:30px/, '按钮高度固定 30px（与胶囊/排序对齐）')
-  assert.match(CLIENT_SRC, /className: "pm-search-clear", title: "清空搜索"/, '展开态要有清空按钮')
-  // 位置：在「已归档」胶囊之后
-  const bar = CLIENT_SRC.slice(CLIENT_SRC.indexOf('className: "pm-bar"'), CLIENT_SRC.indexOf('h("ul", { className: "pm-list"'))
-  const iTabs = bar.indexOf('"all", "active", "candidate", "archived"')
-  const iSearch = bar.indexOf('pm-search-btn')
-  assert.ok(iTabs > 0 && iSearch > iTabs, '搜索按钮必须排在四个筛选胶囊之后')
-  assert.match(bar, /if \(e\.key === "Escape"\) \{ if \(!q\) setSearchOpen\(false\); else setQ\(""\); \}/, 'Esc：先清词、空词时收起')
+  assert.match(CLIENT_SRC, /className: "pm-search-btn" \+ \(\(searchOpen \|\| q\) \? " on" : ""\)/, '按钮常驻且两种状态都在')
+  // 收起时按钮上有词 → 显示徽标
+  assert.match(CLIENT_SRC, /\(!searchOpen && q\) \? h\("span", \{ key: "badge"/, '收起且有词时按钮显示徽标')
+  // 覆盖式：外层 relative，输入框 absolute 覆盖
+  assert.match(CLIENT_SRC, /\.pm-search\{position:relative;flex:0 0 auto\}/, '搜索容器 position:relative（覆盖层基准）')
+  assert.match(CLIENT_SRC, /\.pm-search-box\{position:absolute;left:0;top:0;z-index:3/, '输入框必须**绝对定位覆盖**（不参与 flex 布局）')
+  assert.match(CLIENT_SRC, /\.pm-search-btn\{[^}]*position:relative;z-index:2/, '按钮要在覆盖层之下但可点（收起时点它）')
+  assert.match(CLIENT_SRC, /h\("div", \{ key: "search", className: "pm-search" \}/, '渲染成 pm-search 容器（按钮 + 覆盖输入框）')
 })
 
-test('搜索展开不得撑宽整行（防左右滚动条）', () => {
-  assert.match(CLIENT_SRC, /\.pm-search-box\{[^}]*flex:0 1 180px[^}]*min-width:0[^}]*overflow:hidden/, '展开盒子 flex:0 1 180px + min-width:0 + overflow:hidden（会主动让位）')
+test('搜索框要够宽（用户反馈：展开太短看不见）', () => {
+  assert.match(CLIENT_SRC, /\.pm-search-box input\{width:300px;max-width:52vw/, '输入框宽 300px（小窗口按 52vw 收缩）')
+  assert.match(CLIENT_SRC, /\.pm-search-box\{[^}]*box-shadow:0 8px 24px/, '覆盖层要有阴影，和底下的控件区分开')
+  assert.match(CLIENT_SRC, /@keyframes pm-search-in\{from\{opacity:0;transform:scaleX\(\.85\)/, '要有滑出/展开动画')
+})
+
+test('搜索收起方式：空词再点按钮收起 / 点外部收起（有词则保留）', () => {
+  assert.match(CLIENT_SRC, /onClick: \(\) => \{ if \(searchOpen && !q\) setSearchOpen\(false\); else setSearchOpen\(true\); \}/, '再点按钮：空词收起、否则保持打开')
+  assert.match(CLIENT_SRC, /onBlur: \(\) => setTimeout\(\(\) => \{ if \(!q\) setSearchOpen\(false\) \}, 150\)/, '点外部收起（有词绝不丢弃）')
+  assert.match(CLIENT_SRC, /if \(e\.key === "Escape"\) \{ if \(!q\) setSearchOpen\(false\); else setQ\(""\); \}/, 'Esc：先清词、空词时收起')
+  assert.match(CLIENT_SRC, /const focusEnd = \(el\) => \{[\s\S]{0,200}?el\.setSelectionRange\(n, n\)/, '展开后光标落在末尾')
+  assert.match(CLIENT_SRC, /if \(inp\) inp\.focus\(\);/, '点 ✕ 清空后回焦')
+})
+
+test('搜索不再占 flex 宽度（从根上杜绝撑宽整行/左右滚动条）', () => {
+  const bar = CLIENT_SRC.slice(CLIENT_SRC.indexOf('className: "pm-bar"'), CLIENT_SRC.indexOf('h("ul", { className: "pm-list"'))
+  assert.match(bar, /pm-search/, '搜索在 pm-bar 里')
+  assert.ok(!/\.pm-search-box\{[^}]*flex:0 1/.test(CLIENT_SRC), '覆盖层不得再参与 flex（旧写法已废弃）')
   assert.match(CLIENT_SRC, /\.pm-bar\{[^}]*flex-wrap:nowrap/, 'pm-bar 不换行')
-  assert.match(CLIENT_SRC, /\.pm\{[^}]*overflow-x:hidden/, '外层容器禁止横向滚动（双保险）')
-  assert.match(CLIENT_SRC, /\.pm-search-box input\{flex:1;min-width:0;/, '输入框吃满盒子剩余宽度（长文本横向滚动，不溢出）')
-})
-
-test('排序：常驻最右（不再为搜索让位 —— 让位会撑宽整行）', () => {
-  const bar = CLIENT_SRC.slice(CLIENT_SRC.indexOf('className: "pm-bar"'), CLIENT_SRC.indexOf('h("ul", { className: "pm-list"'))
-  assert.ok(!/searchOpen && q\)\)/.test(bar), '排序不得再因 searchOpen 让位')
-  assert.match(bar, /\(filter !== "archived"\) \? h\("span", \{ style: \{ marginLeft: "auto"/, '排序常驻最右')
+  assert.match(CLIENT_SRC, /\.pm\{[^}]*overflow-x:hidden/, '外层禁横向滚动（双保险）')
+  assert.match(bar, /\(filter !== "archived"\) \? h\("span", \{ style: \{ marginLeft: "auto"/, '排序常驻最右（不让位）')
 })
 
 test('搜索交互细节（参考成熟做法）：光标落位末尾 / ✕ 清空后回焦 / 有词绝不丢弃', () => {
@@ -247,12 +253,6 @@ test('搜索交互细节（参考成熟做法）：光标落位末尾 / ✕ 清�
   assert.match(CLIENT_SRC, /if \(inp\) inp\.focus\(\);/, '点 ✕ 清空后要**回焦**，用户不用再点一次')
   assert.match(CLIENT_SRC, /if \(e\.key === "Escape"\) \{ if \(!q\) setSearchOpen\(false\); else setQ\(""\); \}/, 'Esc：有词先清词、空词才收起（绝不丢词）')
   assert.match(CLIENT_SRC, /className: "pm-search-clear", title: "清空搜索"/, '✕ 只在有词时出现')
-})
-
-test('搜索框宽度：展开后够宽且不溢出（走 flex 让位，不撑破行）', () => {
-  assert.match(CLIENT_SRC, /\.pm-search-box\{[^}]*flex:0 1 180px[^}]*min-width:0/, '展开盒 180px 基准、可让位')
-  assert.match(CLIENT_SRC, /\.pm-search-box input\{flex:1;min-width:0;/, '输入框吃满盒子剩余宽度（长文本横向滚动）')
-  assert.match(CLIENT_SRC, /\.pm-bar\{[^}]*flex-wrap:nowrap/, '不换行，宽度由 flex 分配')
 })
 
 test('排序下拉：文案不减、宽度压窄（全角冒号 + 缩短选项文案 + max-width）', () => {
