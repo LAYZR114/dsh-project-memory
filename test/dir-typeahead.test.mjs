@@ -182,17 +182,24 @@ test('已移除：宿主与 API 也不再暴露目录选择能力（不留死代
 test('布局：顶部按钮成组右对齐；目录/保存/统计并成一条工具条；统计块不再单独占一行', () => {
   assert.match(CLIENT_SRC, /className: "pm-top-actions"/, '导出/导入/新增 要成组（右对齐），不再散落')
   assert.match(CLIENT_SRC, /className: "pm-toolbar"/, '目录输入+保存+统计要在同一条工具条里')
-  assert.match(CLIENT_SRC, /\.pm-toolbar\{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px\}/, '工具条样式必须存在')
-  assert.match(CLIENT_SRC, /\.pm-stat-recent\{[^}]*max-width:330px[^}]*text-overflow:ellipsis[^}]*white-space:nowrap/, '"最近：…" 必须单行省略，不能换行撑高')
-  assert.ok(!/h\("div", \{ className: "pm-stats" \}/.test(CLIENT_SRC), '不再有独立的 pm-stats 块（已并入工具条）')
+  assert.match(CLIENT_SRC, /\.pm-toolbar\{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;margin-bottom:8px\}/, '工具条必须**单行不换行**（曾因换行把搜索/胶囊挤下去）')
+  assert.match(CLIENT_SRC, /\.pm-stat-recent\{[^}]*max-width:230px[^}]*text-overflow:ellipsis[^}]*white-space:nowrap/, '"最近：…" 必须单行省略且可压缩')
+  assert.ok(!/h\("div", \{ className: "pm-stats" \}/.test(CLIENT_SRC), '不再有独立的 pm-stats 块')
   assert.match(CLIENT_SRC, /h\("span", \{ className: "pm-stat", title: "当前项目的记忆条数" \}, "记忆", h\("b", null, memories\.length\)\)/, '记忆数要作为工具条里的小徽标')
-  // 用户要求：保存 + 「记忆 N」胶囊紧跟输入框（往左移，与目录搜索框挨着）
-  const toolbar = CLIENT_SRC.slice(CLIENT_SRC.indexOf('className: "pm-toolbar"'), CLIENT_SRC.indexOf('className: "pm-bar"'))
-  const iSave = toolbar.indexOf('className: "pm-save"')
-  const iStat = toolbar.indexOf('记忆", h("b"')
-  const iRecent = toolbar.indexOf('pm-stat-recent')
-  assert.ok(iSave > 0 && iStat > iSave && iRecent > iStat, '顺序必须是 输入框 → 保存 → 记忆 N → 最近（胶囊紧贴输入框）')
-  assert.ok(!/marginLeft: "auto"/.test(toolbar), '保存/记忆胶囊不得再用 margin-left:auto 推到右边')
+  // 工具条一行必须是：目录输入 → 保存 → 搜索 → 记忆N（不再含"最近"，也不再换行）
+  const toolbar = CLIENT_SRC.slice(CLIENT_SRC.indexOf('className: "pm-toolbar"'), CLIENT_SRC.indexOf('h("div", { className: "pm-bar"'))
+  const order = ['className: "pm-ac-wrap"', 'className: "pm-save"', 'className: "pm-search"', '记忆", h("b"']
+  let prev = -1
+  for (const key of order) {
+    const at = toolbar.indexOf(key)
+    assert.ok(at > prev, '工具条顺序必须是 目录输入 → 保存 → 搜索 → 记忆N（缺失/错位：' + key + '）')
+    prev = at
+  }
+  assert.ok(!/pm-stat-recent/.test(toolbar), '「最近：…」不再放在目录行（会撑满导致折行）')
+  assert.ok(!/marginLeft: "auto"/.test(toolbar), '保存/胶囊不得用 margin-left:auto 推到右边')
+  // 「最近」应在筛选行里
+  const bar = CLIENT_SRC.slice(CLIENT_SRC.indexOf('className: "pm-bar"'), CLIENT_SRC.indexOf('h("ul", { className: "pm-list"'))
+  assert.match(bar, /pm-stat-recent/, '「最近：…」放在筛选行')
 })
 
 test('布局：操作条只放 标签页 + 排序（搜索已上移到目录行）；间距收紧', () => {
@@ -286,19 +293,45 @@ test('搜索位于「项目目录」工具条（目录输入框右侧），不�
 
 // ===== 用户第四轮：搜索控件要与「项目目录」输入框等高 =====
 
-test('搜索按钮/输入框与「项目目录」输入框**严格等高**（同字号 13px、同 padding 9px 12px、高 39px）', () => {
-  const mInput = CLIENT_SRC.match(/\.pm-input\{([^}]*)\}/)
-  const mBtn = CLIENT_SRC.match(/\.pm-search-btn\{([^}]*)\}/)
-  const mBox = CLIENT_SRC.match(/\.pm-search-box\{([^}]*)\}/)
-  const mBoxInput = CLIENT_SRC.match(/\.pm-search-box input\{([^}]*)\}/)
-  assert.ok(mInput && mBtn && mBox && mBoxInput, '四个样式都要存在')
-  for (const [name, css] of [['按钮', mBtn[1]], ['覆盖层', mBox[1]]]) {
-    assert.match(css, /font-size:13px|height:39px/, name + '必须与目录输入框同字号或固定 39px 高')
-    assert.match(css, /border-radius:10px/, name + '圆角要与目录输入框一致（10px）')
+// ===== 用户第四轮（强化）：目录行所有控件必须**固定等高 36px** =====
+
+test('目录行控件统一固定高度 36px（目录输入框/保存/搜索按钮/搜索框/记忆胶囊）', () => {
+  const want = [
+    ['\.pm-input\{', '目录输入框'],
+    ['\.pm-save\{', '保存按钮'],
+    ['\.pm-search-btn\{', '搜索按钮'],
+    ['\.pm-search-box\{', '展开的搜索框'],
+    ['\.pm-stat\{', '记忆胶囊'],
+  ]
+  for (const [sel, name] of want) {
+    const m = CLIENT_SRC.match(new RegExp(sel + '([^}]*)\}'))
+    assert.ok(m, name + ' 样式必须存在')
+    assert.match(m[1], /height:36px/, name + ' 必须固定 height:36px')
+    assert.match(m[1], /box-sizing:border-box/, name + ' 必须 border-box（含边框才是 36px）')
   }
-  assert.match(mBox[1], /height:39px/, '覆盖层高度固定 39px = 目录输入框（9px*2 + 13px*1.6 + 边框）')
-  assert.match(mBoxInput[1], /font-size:13px/, '覆盖层内输入框字号 13px（与目录输入框一致）')
-  assert.match(mInput[1], /padding:9px 12px/, '基准：目录输入框是 9px 12px / 13px')
-  assert.match(mBtn[1], /padding:9px 12px/, '按钮 padding 与目录输入框一致')
-  assert.match(CLIENT_SRC, /\.pm-search-box\{position:absolute;left:0;top:50%;transform:translateY\(-50%\)/, '覆盖层垂直居中于按钮（等高才不跳）')
+  assert.match(CLIENT_SRC, /\.pm-input\{[^}]*border-radius:10px/, '基准圆角 10px')
+  assert.match(CLIENT_SRC, /\.pm-search-btn\{[^}]*border-radius:10px/, '搜索按钮圆角同 10px')
+  assert.match(CLIENT_SRC, /\.pm-search-box\{[^}]*border-radius:10px/, '搜索框圆角同 10px')
+  assert.ok(!/\.pm-search-btn\{[^}]*line-height:1[;}]/.test(CLIENT_SRC), '搜索按钮**不得**再有 line-height:1（曾导致只有 21px 高）')
+})
+
+test('执行等高推算：五者推算高度必须完全相等（防回归）', () => {
+  const css = CLIENT_SRC.slice(CLIENT_SRC.indexOf('const CSS = `') + 12, CLIENT_SRC.indexOf('`;', CLIENT_SRC.indexOf('const CSS = `')))
+  const heightOf = (sel) => {
+    const i = css.indexOf(sel + '{'); const j = css.indexOf('}', i)
+    const body = css.slice(i + sel.length + 1, j)
+    const hm = body.match(/(?:^|;)height:([0-9.]+)px/)
+    if (hm) return parseFloat(hm[1])
+    const pm = body.match(/(?:^|;)padding:([^;]+)/)
+    const pad = pm ? pm[1].trim().split(/\s+/).map(Number) : [0]
+    const fsm = body.match(/(?:^|;)font-size:([0-9.]+)px/)
+    const lhm = body.match(/(?:^|;)line-height:([0-9.]+)/)
+    const fs = fsm ? parseFloat(fsm[1]) : 13
+    const lh = lhm ? parseFloat(lhm[1]) : fs * 1.2
+    return pad[0] * 2 + lh + 2
+  }
+  const a = heightOf('.pm-input'), b = heightOf('.pm-save'), c = heightOf('.pm-search-btn')
+  const d = heightOf('.pm-search-box'), e = heightOf('.pm-stat')
+  assert.ok(a === 36, '基准 .pm-input 应为 36px，实际 ' + a)
+  assert.deepEqual([b, c, d, e], [a, a, a, a], '保存/搜索按钮/搜索框/记忆胶囊必须都等于 ' + a + 'px，实际 ' + [b, c, d, e].join('/'))
 })
