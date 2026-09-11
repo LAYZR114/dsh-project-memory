@@ -349,3 +349,66 @@ test('点按钮展开后可以正常打字：不得有"失焦自动收起"', () 
   assert.match(CLIENT_SRC, /onClick: \(\) => \{ if \(searchOpen && !q\) setSearchOpen\(false\); else setSearchOpen\(true\); \}/, '只有再点按钮才收起')
   assert.match(CLIENT_SRC, /autoFocus: true/, '展开自动聚焦')
 })
+
+// ===== 防"注释吞代码"（2026-09-12 真实事故：保存按钮被 // 整行注掉，测试与自查全被骗过） =====
+// 教训：按**源码字符串**匹配无法区分"真代码"和"注释里的代码"。
+// 因此这里改用**剥离注释后**再匹配，并额外断言关键元素位于可执行行。
+
+test('剥离注释后，目录行的关键控件必须仍然存在（防被注释吞掉）', () => {
+  // 剥离 // 行注释与 /* */ 块注释（保留字符串内的内容近似处理：本文件注释不含引号拼接，够用）
+  const strip = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .map((line) => {
+      // 行内 // 之后视为注释（若 // 出现在引号内则保守不裁，交给下面的"代码行"断言兜底）
+      const q1 = line.indexOf('"'), q2 = line.lastIndexOf('"')
+      const slash = line.indexOf('//')
+      if (slash >= 0 && !(q1 >= 0 && slash > q1 && slash < q2)) return line.slice(0, slash)
+      return line
+    })
+    .join('\n')
+
+  const CODE = strip(CLIENT_SRC)
+  const must = [
+    ['保存按钮', /h\("button", \{ className: "pm-save", onClick: submitDir \}, "保存"\)/],
+    ['搜索按钮', /className: "pm-search-btn" \+ \(\(searchOpen \|\| q\) \? " on" : ""\)/],
+    ['搜索槽', /className: "pm-search-slot" \+ \(searchOpen \? " open" : ""\)/],
+    ['记忆胶囊', /className: "pm-stat", title: "当前项目的记忆条数"/],
+    ['最近行', /className: "pm-recent-row"/],
+    ['排序下拉', /className: "pm-select pm-sort"/],
+  ]
+  for (const [name, re] of must) assert.match(CODE, re, name + ' 必须出现在**非注释代码**中（曾被注释吞掉）')
+})
+
+test('关键控件的渲染语句必须独占可执行行（不得与 // 同行）', () => {
+  const lines = CLIENT_SRC.split('\n')
+  const keys = ['"pm-save"', '"pm-search-btn"', '"pm-stat", title: "当前项目的记忆条数"', '"pm-select pm-sort"', '"pm-recent-row"']
+  for (const k of keys) {
+    const hit = lines.findIndex((l) => l.includes(k))
+    assert.ok(hit >= 0, '必须存在：' + k)
+    const line = lines[hit]
+    const idx = line.indexOf(k)
+    const before = line.slice(0, idx)
+    if (before.includes('//')) {
+      // 只有当 "//" 位于引号之外时才算被注释
+      const q1 = before.indexOf('"'), q2 = before.lastIndexOf('"')
+      const slash = before.indexOf('//')
+      assert.ok(q1 >= 0 && slash > q1 && slash < q2, '第 ' + (hit + 1) + ' 行的 ' + k + ' 不得被 // 注释掉')
+    }
+  }
+})
+
+test('整文件不得存在"注释后紧跟代码"的吞行（结构化扫描）', () => {
+  const lines = CLIENT_SRC.split('\n')
+  const bad = []
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (!line.trim().startsWith('//')) continue
+    const m = line.match(/\/\/[^\n]*?(?<!\S)\s{0,4}(h\(|const |let |return |if \(|for \()/)
+    if (!m) continue
+    const idx = line.indexOf('//')
+    const commentPart = line.slice(idx, line.indexOf(m[1], idx))
+    if (commentPart.length < 60) bad.push('L' + (i + 1))
+  }
+  assert.deepEqual(bad, [], '这些行疑似"注释吞掉代码"：' + bad.join(', '))
+})
