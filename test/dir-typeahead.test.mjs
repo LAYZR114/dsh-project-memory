@@ -491,3 +491,42 @@ test('CSS 模板内不得出现反引号（会提前闭合模板字符串 → �
   const backticks = (cssSeg.match(/`/g) || []).length
   assert.equal(backticks, 0, 'CSS 段内出现 ' + backticks + ' 个反引号（会把模板字符串截断，导致整份客户端代码语法错误）')
 })
+
+// ===== 三个真实缺陷的修复回归（结构审计发现，2026-09-12）=====
+
+test('缺陷①：编辑/新增/删除三条写盘路径必须检查 ok 与 verified（不得谎报成功）', () => {
+  // 统一入口 commitEdit 必须同时检查 ok 与 verified
+  assert.match(CLIENT_SRC, /const commitEdit = \(next, okMsg, onOk\) => \{/, '必须存在统一的 commitEdit 入口')
+  const m = CLIENT_SRC.match(/const commitEdit = \(next, okMsg, onOk\) => \{[\s\S]*?\n\t*\};/)
+  assert.ok(m, '必须能取出 commitEdit 实现')
+  assert.match(m[0], /if \(!r \|\| !r\.ok\)/, 'commitEdit 必须检查 ok')
+  assert.match(m[0], /if \(!r\.verified\)/, 'commitEdit 必须检查 verified（回读校验）')
+  assert.match(m[0], /load\(cwd, \{ keepMsg: true \}\)/, '失败必须重新载入磁盘真实数据（不留下乐观假象）')
+  // 三处调用必须都走 commitEdit，且不得再有"不看结果就报成功"的旧写法
+  assert.match(CLIENT_SRC, /commitEdit\(next, "已保存", \(\) => \{ setEditingId\(null\); setDraft\(null\); \}\)/, '编辑走 commitEdit')
+  assert.match(CLIENT_SRC, /commitEdit\(next, "已新增", \(\) => \{ setEditingId\(null\); setDraft\(null\); \}\)/, '新增走 commitEdit')
+  assert.match(CLIENT_SRC, /commitEdit\(next, "已删除", \(\) => \{ setPendingDeleteId\(null\); \}\)/, '删除走 commitEdit')
+  // ⚠️ 必须**剥离注释**后再查：注释里正描述着这条历史缺陷，直接搜会被注释骗到（本轮踩过同类坑）
+  const stripComments = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').map((line) => {
+      const q1 = line.indexOf('"'), q2 = line.lastIndexOf('"')
+      const slash = line.indexOf('//')
+      if (slash >= 0 && !(q1 >= 0 && slash > q1 && slash < q2)) return line.slice(0, slash)
+      return line
+    }).join('\n')
+  const CODE = stripComments(CLIENT_SRC)
+  const bad = CODE.match(/persist\(next\)\.then\(\(\) => \{ setMemories\(next\)/g) || []
+  assert.equal(bad.length, 0, '（剥离注释后）不得再有"不看 ok/verified 就 setMsg(已保存)"的旧写法（发现 ' + bad.length + ' 处）')
+})
+
+test('缺陷②：「撤销」按钮不得依赖提示消息是否存在', () => {
+  assert.match(CLIENT_SRC, /\(msg \|\| undoOrder\) \? h\("div", \{ className: "pm-msg" \}/, '有消息或有撤销时都要渲染提示条')
+  assert.match(CLIENT_SRC, /msg \|\| "顺序已改变"/, '没有消息时给一句默认文案，保证撤销按钮可见')
+  assert.ok(!/msg \? h\("div", \{ className: "pm-msg" \}, msg, undoOrder \?/.test(CLIENT_SRC), '不得再写成"仅当 msg 存在才渲染（撤销会随之消失）"')
+})
+
+test('缺陷③：死状态/死变量已清除', () => {
+  assert.ok(!/const \[collapsed, setCollapsed\]/.test(CLIENT_SRC), 'collapsed 死状态已删除')
+  assert.ok(!/const statusLabel = \{/.test(CLIENT_SRC), 'statusLabel 死变量已删除')
+})
