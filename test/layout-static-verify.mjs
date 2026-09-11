@@ -139,6 +139,35 @@ console.log('\n[6] 横向溢出阈值（超过则必须换行/滚动条 —— �
   check('展开态需求 < 收起态需求 + 210', needed - closedNeeded === 210);
 }
 
+console.log('\n[7] ★用户要求：胶囊**紧跟🔍**（收起态不被推到最后、展开时让位但不出屏）');
+for (const W of WIDTHS) {
+  const closed = layout(toolbarItems({ searchOpen: false }), W);
+  const open = layout(toolbarItems({ searchOpen: true }), W);
+  const slotC = posOf(closed, 'slot');
+  const statC = posOf(closed, 'stat');
+  const statO = posOf(open, 'stat');
+  const slotO = posOf(open, 'slot');
+  // 收起：胶囊紧跟（🔍/零宽槽 之后一个 gap）→ 因槽宽 0，实际左边距 = 一个 gap
+  check(
+    `W=${W} 收起态胶囊紧贴🔍（间距 ${statC.x - posOf(closed, 'search').right}px，含零宽槽）`,
+    Math.abs(statC.x - (slotC.right + GAP)) < 0.01,
+    '胶囊左边距应 = 搜索槽右边界 + 1 个 gap',
+  )
+  // 展开：胶囊被向右推开正好 210px（= 搜索框宽度）
+  check(
+    `W=${W} 展开时胶囊向右让位 ${statO.x - statC.x}px`,
+    Math.abs(statO.x - statC.x - 210) < 0.01,
+    '让位距离应恰为搜索框宽度 210px',
+  )
+  // 关键：胶囊不得超出容器右边界（用户实测"被顶出界面"）
+  check(
+    `W=${W} 展开时胶囊仍在可视区（右边界 ${Math.round(statO.right)} ≤ ${W}）`,
+    statO.right <= W,
+    '胶囊被顶出屏幕',
+  )
+  void slotO
+}
+
 // ── 可选：位置表 ────────────────────────────────────────────────────────────
 if (process.argv.includes('--table')) {
   console.log('\n=== 位置表（x / width）===');
