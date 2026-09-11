@@ -179,28 +179,6 @@ test('已移除：宿主与 API 也不再暴露目录选择能力（不留死代
 
 // ===== 设置页布局：紧凑化（用户反馈"大空位多、按钮要重排"）=====
 
-test('布局：顶部按钮成组右对齐；目录/保存/统计并成一条工具条；统计块不再单独占一行', () => {
-  assert.match(CLIENT_SRC, /className: "pm-top-actions"/, '导出/导入/新增 要成组（右对齐），不再散落')
-  assert.match(CLIENT_SRC, /className: "pm-toolbar"/, '目录输入+保存+统计要在同一条工具条里')
-  assert.match(CLIENT_SRC, /\.pm-toolbar\{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;margin-bottom:8px\}/, '工具条必须**单行不换行**（曾因换行把搜索/胶囊挤下去）')
-  assert.match(CLIENT_SRC, /\.pm-stat-recent\{[^}]*max-width:230px[^}]*text-overflow:ellipsis[^}]*white-space:nowrap/, '"最近：…" 必须单行省略且可压缩')
-  assert.ok(!/h\("div", \{ className: "pm-stats" \}/.test(CLIENT_SRC), '不再有独立的 pm-stats 块')
-  assert.match(CLIENT_SRC, /h\("span", \{ className: "pm-stat", title: "当前项目的记忆条数" \}, "记忆", h\("b", null, memories\.length\)\)/, '记忆数要作为工具条里的小徽标')
-  // 工具条一行必须是：目录输入 → 保存 → 搜索 → 记忆N（不再含"最近"，也不再换行）
-  const toolbar = CLIENT_SRC.slice(CLIENT_SRC.indexOf('className: "pm-toolbar"'), CLIENT_SRC.indexOf('h("div", { className: "pm-bar"'))
-  const order = ['className: "pm-ac-wrap"', 'className: "pm-save"', 'className: "pm-search"', '记忆", h("b"']
-  let prev = -1
-  for (const key of order) {
-    const at = toolbar.indexOf(key)
-    assert.ok(at > prev, '工具条顺序必须是 目录输入 → 保存 → 搜索 → 记忆N（缺失/错位：' + key + '）')
-    prev = at
-  }
-  assert.ok(!/pm-stat-recent/.test(toolbar), '「最近：…」不再放在目录行（会撑满导致折行）')
-  assert.ok(!/marginLeft: "auto"/.test(toolbar), '保存/胶囊不得用 margin-left:auto 推到右边')
-  // 「最近」应在筛选行里
-  const bar = CLIENT_SRC.slice(CLIENT_SRC.indexOf('className: "pm-bar"'), CLIENT_SRC.indexOf('h("ul", { className: "pm-list"'))
-  assert.match(bar, /pm-stat-recent/, '「最近：…」放在筛选行')
-})
 
 test('布局：操作条只放 标签页 + 排序（搜索已上移到目录行）；间距收紧', () => {
   const bar = CLIENT_SRC.slice(CLIENT_SRC.indexOf('className: "pm-bar"'), CLIENT_SRC.indexOf('h("ul", { className: "pm-list"'))
@@ -225,10 +203,10 @@ test('搜索：图标按钮常驻；点它**覆盖式**滑出输入框（不挤�
   // 收起时按钮上有词 → 显示徽标
   assert.match(CLIENT_SRC, /\(!searchOpen && q\) \? h\("span", \{ key: "badge"/, '收起且有词时按钮显示徽标')
   // 覆盖式：外层 relative，输入框 absolute 覆盖
-  assert.match(CLIENT_SRC, /\.pm-search\{position:relative;flex:0 0 auto;display:inline-flex;align-items:center\}/, '搜索容器 position:relative（覆盖层基准）+ 垂直居中')
+  assert.match(CLIENT_SRC, /\.pm-search\{position:relative;flex:0 0 auto;display:inline-flex;align-items:center;min-width:0\}/, '搜索容器 position:relative（覆盖层基准）+ 垂直居中 + 不许压缩')
   assert.match(CLIENT_SRC, /\.pm-search-box\{position:absolute;left:0;top:50%;transform:translateY\(-50%\);z-index:3/, '输入框必须**绝对定位覆盖**（不参与 flex 布局）')
   assert.match(CLIENT_SRC, /\.pm-search-btn\{[^}]*position:relative;z-index:2/, '按钮要在覆盖层之下但可点（收起时点它）')
-  assert.match(CLIENT_SRC, /\.pm-search\{position:relative;flex:0 0 auto;display:inline-flex;align-items:center\}/, '搜索容器垂直居中，便于与目录输入框对齐')
+  assert.match(CLIENT_SRC, /\.pm-search\{position:relative;flex:0 0 auto;display:inline-flex;align-items:center;min-width:0\}/, '搜索容器垂直居中 + 不许压缩')
   assert.match(CLIENT_SRC, /h\("div", \{ key: "search", className: "pm-search" \}/, '渲染成 pm-search 容器（按钮 + 覆盖输入框）')
 })
 
@@ -334,4 +312,45 @@ test('执行等高推算：五者推算高度必须完全相等（防回归）',
   const d = heightOf('.pm-search-box'), e = heightOf('.pm-stat')
   assert.ok(a === 36, '基准 .pm-input 应为 36px，实际 ' + a)
   assert.deepEqual([b, c, d, e], [a, a, a, a], '保存/搜索按钮/搜索框/记忆胶囊必须都等于 ' + a + 'px，实际 ' + [b, c, d, e].join('/'))
+})
+
+// ===== 用户定案布局（2026-09-11）：目录行一行紧挨 + 「最近」独立一行在筛选胶囊上方 =====
+
+test('目录行：项目目录 [输入框] [保存] [🔍] (记忆N) —— 全部紧挨、行尾不留空、且都不许被压缩', () => {
+  const iTool = CLIENT_SRC.indexOf('className: "pm-toolbar"')
+  const iBar = CLIENT_SRC.indexOf('className: "pm-bar"')
+  const iRecentRow = CLIENT_SRC.indexOf('className: "pm-recent-row"')
+  const tool = CLIENT_SRC.slice(iTool, iRecentRow) // 目录行到「最近」行之前
+  const order = ['className: "pm-ac-wrap"', 'className: "pm-save"', 'className: "pm-search"', '记忆", h("b"']
+  let prev = -1
+  for (const key of order) {
+    const at = tool.indexOf(key)
+    assert.ok(at > prev, '顺序必须是 目录输入 → 保存 → 搜索 → 记忆N（错位/缺失：' + key + '）')
+    prev = at
+  }
+  assert.ok(!/pm-stat-recent/.test(tool), '目录行不再放「最近」（它会让行撑满/折行）')
+  assert.match(CLIENT_SRC, /\.pm-toolbar\{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;margin-bottom:8px\}/, '目录行不换行')
+  // 关键：除输入框外都不可压缩，否则「保存」会被压没（用户实测）
+  assert.match(CLIENT_SRC, /\.pm-save\{[^}]*flex:0 0 auto/, '保存按钮不允许被压缩')
+  assert.match(CLIENT_SRC, /\.pm-search\{position:relative;flex:0 0 auto;display:inline-flex;align-items:center;min-width:0\}/, '搜索容器不允许被压缩')
+  assert.match(CLIENT_SRC, /\.pm-stat\{[^}]*flex:0 0 auto/, '记忆胶囊不允许被压缩')
+  // 输入框固定宽度（不用 flex:1 抢空间 → 后面的按钮自然紧贴）
+  assert.match(CLIENT_SRC, /\.pm-toolbar \.pm-ac-wrap\{flex:0 0 210px\}/, '目录输入固定 210px，不再抢空间')
+  assert.ok(!/\.pm-toolbar \.pm-ac-wrap\{flex:1/.test(CLIENT_SRC), '输入框不得用 flex:1（会把按钮推到很远的右边）')
+})
+
+test('搜索按钮：固定 40×36 只放图标（不再被撑宽成 100px 的怪块）', () => {
+  assert.match(CLIENT_SRC, /\.pm-search-btn\{[^}]*height:36px;width:40px;flex:0 0 auto/, '搜索按钮固定 40×36 且不许压缩')
+  assert.match(CLIENT_SRC, /\.pm-search-btn\{[^}]*gap:0/, '按钮内不再留 gap（避免被撑宽）')
+})
+
+test('「最近：xxx」独立一行，位于筛选胶囊**上方**，且给足宽度不压缩', () => {
+  const iRecent = CLIENT_SRC.indexOf('className: "pm-recent-row"')
+  const iBar = CLIENT_SRC.indexOf('className: "pm-bar"')
+  const iTool = CLIENT_SRC.indexOf('className: "pm-toolbar"')
+  assert.ok(iRecent > iTool && iRecent < iBar, '「最近」行必须在目录行之后、筛选行之前（= 四个分类上方）')
+  assert.match(CLIENT_SRC, /\.pm-recent-row\{display:flex;align-items:center;gap:8px;margin-bottom:8px\}/, '独立一行样式')
+  assert.match(CLIENT_SRC, /\.pm-recent-row \.pm-stat-recent\{flex:1 1 auto;min-width:0;max-width:none;color:#c9c9c9\}/, '该行内不吃 max-width 限制、颜色要够亮（不再被压成"最近: …"）')
+  const iRecent2 = CLIENT_SRC.indexOf('className: "pm-recent-row"')
+  assert.ok(iRecent2 > 0 && iRecent2 < iBar, '「最近」行在筛选行之前（四个分类上方）')
 })
