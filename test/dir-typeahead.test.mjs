@@ -427,3 +427,56 @@ test('约束②③：搜索框在🔍**右侧**展开，且展开时🔍位置�
   assert.match(CLIENT_SRC, /\.pm-toolbar\.pm-toolbar-search \.pm-ac-wrap\{width:150px\}/, '展开时输入框缩到 150px（吸收宽度变化，🔍 位置不变）')
   assert.match(CLIENT_SRC, /className: "pm-toolbar" \+ \(searchOpen \? " pm-toolbar-search" : ""\)/, '工具条按 searchOpen 切换搜索态类名')
 })
+
+// ===== CSS 冲突守卫（2026-09-12 事故：.pm-ac-wrap 上 flex:1 覆盖工具条宽度规则 → 改了多轮不生效） =====
+
+test('目录输入外壳(.pm-ac-wrap)只能有一条规则声明布局宽高（禁止多处竞争）', () => {
+  const css = CLIENT_SRC.slice(CLIENT_SRC.indexOf('const CSS = `') + 12, CLIENT_SRC.indexOf('`;', CLIENT_SRC.indexOf('const CSS = `')))
+  const rules = []
+  for (const line of css.split('\n')) {
+    const l = line.trim()
+    if (!l || l.startsWith('/*') || l.startsWith('*')) continue
+    for (const m of l.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (m[1].includes('pm-ac-wrap')) rules.push({ sel: m[1].trim(), body: m[2].trim() })
+    }
+  }
+  const withFlex = rules.filter((r) => /(^|;)\s*flex\s*:/.test(r.body))
+  assert.equal(withFlex.length, 1, '只能有 1 条规则声明 flex（当前 ' + withFlex.length + ' 条：' + withFlex.map((r) => r.sel).join(' / ') + '）')
+  // 基础规则（单类选择器）不得再声明宽度/伸缩，避免与工具条规则竞争
+  const base = rules.find((r) => r.sel === '.pm-ac-wrap')
+  assert.ok(base, '.pm-ac-wrap 基础规则必须存在（给下拉做定位基准）')
+  assert.match(base.body, /position:relative/, '基础规则只负责定位')
+  assert.ok(!/flex\s*:/.test(base.body), '.pm-ac-wrap 基础规则**不得**再写 flex（曾覆盖工具条宽度规则）')
+  assert.ok(!/min-width\s*:/.test(base.body), '.pm-ac-wrap 基础规则不得写 min-width（交给工具条规则）')
+})
+
+test('CSS 不得出现"同选择器两条规则声明同一布局属性"（结构化扫描）', () => {
+  const css = CLIENT_SRC.slice(CLIENT_SRC.indexOf('const CSS = `') + 12, CLIENT_SRC.indexOf('`;', CLIENT_SRC.indexOf('const CSS = `')))
+  const byKey = new Map()
+  for (const line of css.split('\n')) {
+    const l = line.trim()
+    if (!l || l.startsWith('/*') || l.startsWith('*')) continue
+    for (const m of l.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const sel = m[1].trim()
+      if (!sel || sel.startsWith('@') || /^[0-9.]+%$/.test(sel) || sel === 'from' || sel === 'to') continue
+      for (const decl of m[2].split(';')) {
+        const k = decl.split(':')[0].trim()
+        if (!['flex', 'width', 'min-width', 'max-width', 'height'].includes(k)) continue
+        const key = sel + '|' + k
+        byKey.set(key, (byKey.get(key) || 0) + 1)
+      }
+    }
+  }
+  const bad = [...byKey.entries()].filter(([, n]) => n > 1).map(([k]) => k)
+  assert.deepEqual(bad, [], '同选择器重复声明布局属性（易造成"改了不生效"）：' + bad.join(', '))
+})
+
+test('CSS 模板内不得出现反引号（会提前闭合模板字符串 → 语法错，本轮踩坑 3 次）', () => {
+  const tpl = CLIENT_SRC
+  const start = tpl.indexOf('const CSS = `') + 'const CSS = `'.length
+  const end = tpl.indexOf('`;', start)
+  assert.ok(start > 12 && end > start, '必须能定位 CSS 模板区间')
+  const cssSeg = tpl.slice(start, end)
+  const backticks = (cssSeg.match(/`/g) || []).length
+  assert.equal(backticks, 0, 'CSS 段内出现 ' + backticks + ' 个反引号（会把模板字符串截断，导致整份客户端代码语法错误）')
+})
