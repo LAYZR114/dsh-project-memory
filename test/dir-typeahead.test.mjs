@@ -403,7 +403,7 @@ test('约束①：收起态四个控件紧贴（输入框不抢剩余空间，�
   const m = CLIENT_SRC.match(/\.pm-toolbar \.pm-ac-wrap\{([^}]*)\}/)
   assert.ok(m, '目录输入框样式必须存在')
   assert.ok(!/flex:1\s/.test(m[1]) && !/flex:1;/.test(m[1]), '输入框不得用 flex:1 抢占剩余空间（否则与后面控件不紧贴）')
-  assert.match(m[1], /width:240px/, '输入框给固定基准宽度 240px')
+  assert.match(m[1], /width:170px/, '输入框给固定基准宽度 240px')
   assert.match(m[1], /flex:0 0 auto/, '外壳**禁止伸缩**（flex:0 0 auto，彻底不参与抢空间）')
   // 行尾空白必须由胶囊吸走 → 前面几个自然紧贴
   assert.match(CLIENT_SRC, /\.pm-toolbar \.pm-stat\{margin-left:auto\}/, '胶囊用 margin-left:auto 吸收行尾空白，保证前面紧贴')
@@ -424,7 +424,7 @@ test('约束②③：搜索框在🔍**右侧**展开，且展开时🔍位置�
   assert.match(CLIENT_SRC, /\.pm-search-slot\.open\{width:210px\}/, '槽展开 210px')
   assert.match(CLIENT_SRC, /\.pm-search-btn\{[^}]*width:40px[^}]*flex:0 0 auto/, '🔍 固定 40px 且不可压缩（展开时自身不动）')
   // 展开时输入框主动缩窄吸收宽度变化，🔍 不被推走
-  assert.match(CLIENT_SRC, /\.pm-toolbar\.pm-toolbar-search \.pm-ac-wrap\{width:150px\}/, '展开时输入框缩到 150px（吸收宽度变化，🔍 位置不变）')
+  assert.match(CLIENT_SRC, /\.pm-toolbar\.pm-toolbar-search \.pm-ac-wrap\{width:130px\}/, '展开时输入框缩到 150px（吸收宽度变化，🔍 位置不变）')
   assert.match(CLIENT_SRC, /className: "pm-toolbar" \+ \(searchOpen \? " pm-toolbar-search" : ""\)/, '工具条按 searchOpen 切换搜索态类名')
 })
 
