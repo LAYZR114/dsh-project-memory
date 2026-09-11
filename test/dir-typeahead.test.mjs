@@ -195,10 +195,10 @@ test('布局：顶部按钮成组右对齐；目录/保存/统计并成一条工
   assert.ok(!/marginLeft: "auto"/.test(toolbar), '保存/记忆胶囊不得再用 margin-left:auto 推到右边')
 })
 
-test('布局：标签页/搜索/排序同一行；间距收紧', () => {
+test('布局：操作条只放 标签页 + 排序（搜索已上移到目录行）；间距收紧', () => {
   const bar = CLIENT_SRC.slice(CLIENT_SRC.indexOf('className: "pm-bar"'), CLIENT_SRC.indexOf('h("ul", { className: "pm-list"'))
   assert.match(bar, /pm-tab/, '标签页在 pm-bar 里')
-  assert.match(bar, /pm-search-btn/, '搜索在 pm-bar 里')
+  assert.ok(!/pm-search/.test(bar), '搜索**不再**在操作条里（已移到「项目目录」那一行）')
   assert.match(bar, /value: sort/, '排序下拉也在 pm-bar 里（不再单独占一行）')
   assert.match(CLIENT_SRC, /\.pm-bar\{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:nowrap\}/, 'pm-bar 不换行，避免把排序挤到第二行')
   assert.match(CLIENT_SRC, /\.pm-top\{[^}]*margin-bottom:8px\}/, '顶部间距收紧到 8px')
@@ -225,14 +225,15 @@ test('搜索：图标按钮常驻；点它**覆盖式**滑出输入框（不挤�
 })
 
 test('搜索框够宽 + 展开后与按钮同色无缝（用户反馈：太短看不见 / 颜色突兀）', () => {
-  assert.match(CLIENT_SRC, /\.pm-search-box input\{width:268px;max-width:48vw/, '输入框宽 268px（小窗口按 48vw 收缩）')
+  assert.match(CLIENT_SRC, /\.pm-search-box input\{width:200px;max-width:38vw/, '输入框宽 200px（小窗口按 38vw 收缩）')
   assert.match(CLIENT_SRC, /\.pm-search-box\{[^}]*box-shadow:0 8px 24px/, '覆盖层要有阴影，和底下的控件区分开')
   assert.match(CLIENT_SRC, /@keyframes pm-search-in\{from\{opacity:0;transform:scaleX\(\.9\)/, '要有滑出/展开动画')
   // 同色无缝：按钮底色与覆盖层一致（#1a1a1a）；展开态按钮不换色，只切边框色
-  assert.match(CLIENT_SRC, /\.pm-search-btn\{[^}]*background:#1a1a1a/, '按钮底色 = 覆盖层底色（不再突兀）')
-  assert.match(CLIENT_SRC, /\.pm-search-btn\.on\{background:#1a1a1a;color:#8f8f8f;border-color:#4a4a4a/, '展开态按钮与覆盖层同色同边框')
+  assert.match(CLIENT_SRC, /\.pm-search-btn\{[^}]*background:#141414[^}]*border:1px solid #141414/, '按钮底色与边框都是**深色（黑）**，与搜索框同色系')
+  assert.match(CLIENT_SRC, /\.pm-search-btn\.on\{background:#141414;color:#8f8f8f;border-color:#141414/, '展开态按钮与覆盖层同色同边框（黑）')
   assert.match(CLIENT_SRC, /className: "pm-search-lens"/, '覆盖层自带图标（与按钮图标同位同色 = "按钮变成输入框"）')
   assert.match(CLIENT_SRC, /\.pm-search-box\{[^}]*padding:0 10px 0 34px/, '覆盖层左侧留图标位（内容不压图标）')
+  assert.match(CLIENT_SRC, /\.pm-search-box\{[^}]*background:#141414[^}]*border:1px solid #141414/, '覆盖层与按钮同为深色（黑），融为一体')
 })
 
 test('搜索收起方式：空词再点按钮收起 / 点外部收起（有词则保留）', () => {
@@ -245,7 +246,6 @@ test('搜索收起方式：空词再点按钮收起 / 点外部收起（有词�
 
 test('搜索不再占 flex 宽度（从根上杜绝撑宽整行/左右滚动条）', () => {
   const bar = CLIENT_SRC.slice(CLIENT_SRC.indexOf('className: "pm-bar"'), CLIENT_SRC.indexOf('h("ul", { className: "pm-list"'))
-  assert.match(bar, /pm-search/, '搜索在 pm-bar 里')
   assert.ok(!/\.pm-search-box\{[^}]*flex:0 1/.test(CLIENT_SRC), '覆盖层不得再参与 flex（旧写法已废弃）')
   assert.match(CLIENT_SRC, /\.pm-bar\{[^}]*flex-wrap:nowrap/, 'pm-bar 不换行')
   assert.match(CLIENT_SRC, /\.pm\{[^}]*overflow-x:hidden/, '外层禁横向滚动（双保险）')
@@ -265,4 +265,20 @@ test('排序下拉：文案不减、宽度压窄（全角冒号 + 缩短选项�
   for (const label of ['排序：默认', '排序：从新到旧', '排序：重要等级高→低', '排序：自动注入多→少'])
     assert.ok(CLIENT_SRC.includes('"' + label + '"'), '选项文案必须保留（不删字）：' + label)
   assert.match(CLIENT_SRC, /className: "pm-select pm-sort"/, '排序下拉要带 pm-sort 类')
+})
+
+// ===== 用户第三轮：搜索挪到「项目目录」那一行 =====
+
+test('搜索位于「项目目录」工具条（目录输入框右侧），不再在筛选行里', () => {
+  const iTool = CLIENT_SRC.indexOf('className: "pm-toolbar"')
+  const iBar = CLIENT_SRC.indexOf('className: "pm-bar"')
+  const iList = CLIENT_SRC.indexOf('h("ul", { className: "pm-list"')
+  const iSearch = CLIENT_SRC.indexOf('className: "pm-search"')
+  assert.ok(iTool > 0 && iBar > iTool && iList > iBar, '三个区域的顺序必须是 工具条 → 操作条 → 列表')
+  assert.ok(iSearch > iTool && iSearch < iBar, '搜索块必须落在工具条区间内（与目录输入框同一行）')
+  const tool = CLIENT_SRC.slice(iTool, iBar)
+  assert.match(tool, /className: "pm-ac-wrap"/, '同一行要有目录输入框（Typeahead）')
+  assert.match(tool, /className: "pm-save"/, '同一行要有「保存」')
+  assert.match(tool, /className: "pm-search"/, '同一行要有搜索')
+  assert.ok((CLIENT_SRC.match(/className: "pm-search"/g) || []).length === 1, '搜索块只能出现一次（防重复渲染）')
 })
