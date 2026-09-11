@@ -218,9 +218,10 @@ test('搜索：图标按钮常驻；点它**覆盖式**滑出输入框（不挤�
   // 收起时按钮上有词 → 显示徽标
   assert.match(CLIENT_SRC, /\(!searchOpen && q\) \? h\("span", \{ key: "badge"/, '收起且有词时按钮显示徽标')
   // 覆盖式：外层 relative，输入框 absolute 覆盖
-  assert.match(CLIENT_SRC, /\.pm-search\{position:relative;flex:0 0 auto\}/, '搜索容器 position:relative（覆盖层基准）')
-  assert.match(CLIENT_SRC, /\.pm-search-box\{position:absolute;left:0;top:0;z-index:3/, '输入框必须**绝对定位覆盖**（不参与 flex 布局）')
+  assert.match(CLIENT_SRC, /\.pm-search\{position:relative;flex:0 0 auto;display:inline-flex;align-items:center\}/, '搜索容器 position:relative（覆盖层基准）+ 垂直居中')
+  assert.match(CLIENT_SRC, /\.pm-search-box\{position:absolute;left:0;top:50%;transform:translateY\(-50%\);z-index:3/, '输入框必须**绝对定位覆盖**（不参与 flex 布局）')
   assert.match(CLIENT_SRC, /\.pm-search-btn\{[^}]*position:relative;z-index:2/, '按钮要在覆盖层之下但可点（收起时点它）')
+  assert.match(CLIENT_SRC, /\.pm-search\{position:relative;flex:0 0 auto;display:inline-flex;align-items:center\}/, '搜索容器垂直居中，便于与目录输入框对齐')
   assert.match(CLIENT_SRC, /h\("div", \{ key: "search", className: "pm-search" \}/, '渲染成 pm-search 容器（按钮 + 覆盖输入框）')
 })
 
@@ -232,7 +233,7 @@ test('搜索框够宽 + 展开后与按钮同色无缝（用户反馈：太短�
   assert.match(CLIENT_SRC, /\.pm-search-btn\{[^}]*background:#141414[^}]*border:1px solid #141414/, '按钮底色与边框都是**深色（黑）**，与搜索框同色系')
   assert.match(CLIENT_SRC, /\.pm-search-btn\.on\{background:#141414;color:#8f8f8f;border-color:#141414/, '展开态按钮与覆盖层同色同边框（黑）')
   assert.match(CLIENT_SRC, /className: "pm-search-lens"/, '覆盖层自带图标（与按钮图标同位同色 = "按钮变成输入框"）')
-  assert.match(CLIENT_SRC, /\.pm-search-box\{[^}]*padding:0 10px 0 34px/, '覆盖层左侧留图标位（内容不压图标）')
+  assert.match(CLIENT_SRC, /\.pm-search-box\{[^}]*padding:0 10px 0 32px/, '覆盖层左侧留图标位（内容不压图标）')
   assert.match(CLIENT_SRC, /\.pm-search-box\{[^}]*background:#141414[^}]*border:1px solid #141414/, '覆盖层与按钮同为深色（黑），融为一体')
 })
 
@@ -281,4 +282,23 @@ test('搜索位于「项目目录」工具条（目录输入框右侧），不�
   assert.match(tool, /className: "pm-save"/, '同一行要有「保存」')
   assert.match(tool, /className: "pm-search"/, '同一行要有搜索')
   assert.ok((CLIENT_SRC.match(/className: "pm-search"/g) || []).length === 1, '搜索块只能出现一次（防重复渲染）')
+})
+
+// ===== 用户第四轮：搜索控件要与「项目目录」输入框等高 =====
+
+test('搜索按钮/输入框与「项目目录」输入框**严格等高**（同字号 13px、同 padding 9px 12px、高 39px）', () => {
+  const mInput = CLIENT_SRC.match(/\.pm-input\{([^}]*)\}/)
+  const mBtn = CLIENT_SRC.match(/\.pm-search-btn\{([^}]*)\}/)
+  const mBox = CLIENT_SRC.match(/\.pm-search-box\{([^}]*)\}/)
+  const mBoxInput = CLIENT_SRC.match(/\.pm-search-box input\{([^}]*)\}/)
+  assert.ok(mInput && mBtn && mBox && mBoxInput, '四个样式都要存在')
+  for (const [name, css] of [['按钮', mBtn[1]], ['覆盖层', mBox[1]]]) {
+    assert.match(css, /font-size:13px|height:39px/, name + '必须与目录输入框同字号或固定 39px 高')
+    assert.match(css, /border-radius:10px/, name + '圆角要与目录输入框一致（10px）')
+  }
+  assert.match(mBox[1], /height:39px/, '覆盖层高度固定 39px = 目录输入框（9px*2 + 13px*1.6 + 边框）')
+  assert.match(mBoxInput[1], /font-size:13px/, '覆盖层内输入框字号 13px（与目录输入框一致）')
+  assert.match(mInput[1], /padding:9px 12px/, '基准：目录输入框是 9px 12px / 13px')
+  assert.match(mBtn[1], /padding:9px 12px/, '按钮 padding 与目录输入框一致')
+  assert.match(CLIENT_SRC, /\.pm-search-box\{position:absolute;left:0;top:50%;transform:translateY\(-50%\)/, '覆盖层垂直居中于按钮（等高才不跳）')
 })
