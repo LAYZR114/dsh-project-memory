@@ -404,7 +404,7 @@ test('约束①：收起态四个控件紧贴（输入框不抢剩余空间，�
   assert.ok(m, '目录输入框样式必须存在')
   assert.ok(!/flex:1\s/.test(m[1]) && !/flex:1;/.test(m[1]), '输入框不得用 flex:1 抢占剩余空间（否则与后面控件不紧贴）')
   assert.match(m[1], /width:240px/, '输入框给固定基准宽度 240px')
-  assert.match(m[1], /flex:0 1 auto/, '输入框只在自己那块宽度里可压缩（0 1 auto）')
+  assert.match(m[1], /flex:0 0 auto/, '外壳**禁止伸缩**（flex:0 0 auto，彻底不参与抢空间）')
   // 行尾空白必须由胶囊吸走 → 前面几个自然紧贴
   assert.match(CLIENT_SRC, /\.pm-toolbar \.pm-stat\{margin-left:auto\}/, '胶囊用 margin-left:auto 吸收行尾空白，保证前面紧贴')
   // 其余控件不可压缩
