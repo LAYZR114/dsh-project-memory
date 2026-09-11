@@ -254,23 +254,6 @@ test('渲染块唯一性：「最近」只出现一次、排序下拉只出现�
 
 // ===== 搜索与目录行 · 定稿断言（对齐当前真实实现，2026-09-11） =====
 
-test('目录行：项目目录 [输入框] [保存] [🔍] (记忆N)，只有输入框可压缩、其余一律不可压缩', () => {
-  const iTool = CLIENT_SRC.indexOf('className: "pm-toolbar"')
-  const iRecent = CLIENT_SRC.indexOf('className: "pm-recent-row"')
-  const tool = CLIENT_SRC.slice(iTool, iRecent)
-  const order = ['className: "pm-ac-wrap"', 'className: "pm-save"', 'className: "pm-search"', '记忆", h("b"']
-  let prev = -1
-  for (const k of order) { const at = tool.indexOf(k); assert.ok(at > prev, '顺序错误：' + k); prev = at }
-  assert.ok(!/pm-stat-recent/.test(tool), '目录行不放「最近」')
-  // CSS 约束（对应 TruePPM #1008：nowrap 行里未声明不可压缩的项会被挤没）
-  assert.match(CLIENT_SRC, /\.pm-toolbar\{[^}]*flex-wrap:nowrap/, '目录行不换行')
-  assert.match(CLIENT_SRC, /\.pm-toolbar \.pm-ac-wrap\{flex:1 1 auto;min-width:110px\}/, '输入框：可压缩 + min-width:0 语义')
-  assert.match(CLIENT_SRC, /\.pm-input\{[^}]*flex:1 1 auto;min-width:0/, '输入框内部同样 min-width:0')
-  for (const [sel, name] of [['\.pm-save\{', '保存按钮'], ['\.pm-search\{', '搜索容器'], ['\.pm-search-btn\{', '搜索按钮'], ['\.pm-stat\{', '记忆胶囊']]) {
-    const m = CLIENT_SRC.match(new RegExp(sel + '([^}]*)\}'))
-    assert.ok(m && /flex:0 0 auto/.test(m[1]), name + ' 必须 flex:0 0 auto（否则会被压没）')
-  }
-})
 
 test('五控件统一固定高度 36px + 同圆角（不再"哪个矮一截"）', () => {
   for (const [sel, name, extra] of [
@@ -411,4 +394,36 @@ test('整文件不得存在"注释后紧跟代码"的吞行（结构化扫描）
     if (commentPart.length < 60) bad.push('L' + (i + 1))
   }
   assert.deepEqual(bad, [], '这些行疑似"注释吞掉代码"：' + bad.join(', '))
+})
+
+// ===== 用户三条硬约束（2026-09-12）：紧贴 / 向右展开 / 🔍 位置不变 =====
+
+test('约束①：收起态四个控件紧贴（输入框不抢剩余空间，空白归胶囊）', () => {
+  // 输入框不得用 flex:1（那会吃掉剩余空间 → 与保存/🔍之间出现大空白，用户实测图）
+  const m = CLIENT_SRC.match(/\.pm-toolbar \.pm-ac-wrap\{([^}]*)\}/)
+  assert.ok(m, '目录输入框样式必须存在')
+  assert.ok(!/flex:1\s/.test(m[1]) && !/flex:1;/.test(m[1]), '输入框不得用 flex:1 抢占剩余空间（否则与后面控件不紧贴）')
+  assert.match(m[1], /width:240px/, '输入框给固定基准宽度 240px')
+  assert.match(m[1], /flex:0 1 auto/, '输入框只在自己那块宽度里可压缩（0 1 auto）')
+  // 行尾空白必须由胶囊吸走 → 前面几个自然紧贴
+  assert.match(CLIENT_SRC, /\.pm-toolbar \.pm-stat\{margin-left:auto\}/, '胶囊用 margin-left:auto 吸收行尾空白，保证前面紧贴')
+  // 其余控件不可压缩
+  for (const [sel, name] of [['\.pm-save\{', '保存按钮'], ['\.pm-search\{', '搜索容器'], ['\.pm-search-btn\{', '搜索按钮'], ['\.pm-stat\{', '记忆胶囊']]) {
+    const mm = CLIENT_SRC.match(new RegExp(sel + '([^}]*)\}'))
+    assert.ok(mm && /flex:0 0 auto/.test(mm[1]), name + ' 必须 flex:0 0 auto')
+  }
+})
+
+test('约束②③：搜索框在🔍**右侧**展开，且展开时🔍位置不变', () => {
+  // 结构顺序：按钮在前、搜索槽在后 → 只可能向右展开
+  const iBtn = CLIENT_SRC.indexOf('className: "pm-search-btn"')
+  const iSlot = CLIENT_SRC.indexOf('className: "pm-search-slot"')
+  assert.ok(iBtn > 0 && iSlot > iBtn, '搜索槽必须排在🔍按钮**之后**（向右展开）')
+  // 槽宽度 0 → 210 展开，是唯一宽度变化源（🔍 自身宽度固定 40px，不参与变化）
+  assert.match(CLIENT_SRC, /\.pm-search-slot\{flex:0 0 auto;width:0;overflow:hidden;transition:width \.22s ease-out\}/, '槽收起 0 宽')
+  assert.match(CLIENT_SRC, /\.pm-search-slot\.open\{width:210px\}/, '槽展开 210px')
+  assert.match(CLIENT_SRC, /\.pm-search-btn\{[^}]*width:40px[^}]*flex:0 0 auto/, '🔍 固定 40px 且不可压缩（展开时自身不动）')
+  // 展开时输入框主动缩窄吸收宽度变化，🔍 不被推走
+  assert.match(CLIENT_SRC, /\.pm-toolbar\.pm-toolbar-search \.pm-ac-wrap\{width:150px\}/, '展开时输入框缩到 150px（吸收宽度变化，🔍 位置不变）')
+  assert.match(CLIENT_SRC, /className: "pm-toolbar" \+ \(searchOpen \? " pm-toolbar-search" : ""\)/, '工具条按 searchOpen 切换搜索态类名')
 })
