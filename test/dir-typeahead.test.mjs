@@ -245,7 +245,7 @@ test('渲染块唯一性：「最近」只出现一次、排序下拉只出现�
   const bar = CLIENT_SRC.slice(iBar, iList)
   assert.ok(!/pm-stat-recent/.test(bar), '筛选行里不得再有「最近」（曾重复导致两个）')
   assert.match(bar, /pm-sort/, '筛选行里必须还有排序下拉')
-  assert.match(bar, /marginLeft: "auto"/, '排序靠右常驻')
+  assert.ok(!/marginLeft: "auto"/.test(bar), '排序不再顶到最右（改为紧跟「已归档」右边）')
 })
 
 // ===== 用户定案：搜索向右展开、「记忆 N」让位动画、零遮挡（2026-09-11） =====
@@ -289,14 +289,14 @@ test('五控件统一固定高度 36px + 同圆角（不再"哪个矮一截"）'
 })
 
 test('搜索：向右推开（grid 0fr→1fr）+ 「记忆 N」让位动画 + 零遮挡', () => {
-  assert.match(CLIENT_SRC, /\.pm-search-slot\{display:grid;grid-template-columns:0fr;transition:grid-template-columns \.22s ease-out\}/, 'grid 收起 0fr + 220ms ease-out')
-  assert.match(CLIENT_SRC, /\.pm-search-slot\.open\{grid-template-columns:1fr\}/, '展开 1fr（推开右侧胶囊）')
-  assert.match(CLIENT_SRC, /\.pm-search-inner\{overflow:hidden;min-width:0\}/, '内层裁剪，过渡不溢出')
+  assert.match(CLIENT_SRC, /\.pm-search-slot\{flex:0 0 auto;width:0;overflow:hidden;transition:width \.22s ease-out\}/, '收起态 width:0 + 不可压缩 + 220ms ease-out')
+  assert.match(CLIENT_SRC, /\.pm-search-slot\.open\{width:210px\}/, '展开 210px（向右推开胶囊）')
+  assert.match(CLIENT_SRC, /\.pm-search-inner\{width:210px;display:flex;align-items:center\}/, '内层固定 210px（外层裁剪，过渡不溢出）')
   assert.ok(!/\.pm-search-box\{[^}]*position:absolute/.test(CLIENT_SRC), '搜索框不得绝对定位覆盖（零遮挡）')
-  assert.match(CLIENT_SRC, /\.pm-stat\{[^}]*transition:margin \.22s ease-out/, '胶囊有让位过渡动画')
+  assert.match(CLIENT_SRC, /\.pm-stat\{[^}]*transition:transform \.22s ease-out/, '胶囊有让位位移动画（被推开是滑过去的）')
+  assert.match(CLIENT_SRC, /\.pm-search-btn\.on\{background:#141414;color:#8f8f8f;border-radius:10px 0 0 10px\}/, '展开时按钮右圆角归零 → 与输入框拼成一个整体')
   assert.match(CLIENT_SRC, /className: "pm-search-slot" \+ \(searchOpen \? " open" : ""\)/, 'slot.open 与 searchOpen 绑定')
   assert.match(CLIENT_SRC, /onClick: \(\) => \{ if \(searchOpen && !q\) setSearchOpen\(false\); else setSearchOpen\(true\); \}/, '再点按钮：空词收起、有词保持')
-  assert.match(CLIENT_SRC, /onBlur: \(\) => setTimeout\(\(\) => \{ if \(!q\) setSearchOpen\(false\) \}, 150\)/, '点外部收起（有词保留）')
   assert.match(CLIENT_SRC, /if \(e\.key === "Escape"\) \{ if \(!q\) setSearchOpen\(false\); else setQ\(""\); \}/, 'Esc：先清词、空词收起')
   assert.match(CLIENT_SRC, /const focusEnd = \(el\) => \{[\s\S]{0,200}?el\.setSelectionRange\(n, n\)/, '展开后光标落在末尾')
 })
@@ -323,5 +323,29 @@ test('清爽度：核心类各只有 1 条规则（禁止重复追加成屎山�
   // 精确匹配独立类名（避免把新类 pm-search-inner 误判为废弃的 pm-search-in）
   for (const dead of ['pm-search-lens', 'pm-search-wrap']) assert.ok(!CLIENT_SRC.includes(dead), '废弃类名残留：' + dead)
   assert.ok(!/pm-search-in\{/.test(CLIENT_SRC) && !/@keyframes pm-search-in\{/.test(CLIENT_SRC), '废弃的 pm-search-in 动画/规则已清')
-  assert.match(CLIENT_SRC, /\.pm-search-inner\{overflow:hidden;min-width:0\}/, '新类 pm-search-inner 存在')
+  assert.match(CLIENT_SRC, /\.pm-search-inner\{width:210px;display:flex;align-items:center\}/, '新类 pm-search-inner 存在（固定 210px 由外层裁剪）')
+})
+
+// ===== 用户定案图（2026-09-11 第二轮）：按图逐条落实 =====
+
+test('搜索收起态真的不占宽（width:0 + 不可压缩）→ 保存按钮不会被挤出屏', () => {
+  const m = CLIENT_SRC.match(/\.pm-search-slot\{([^}]*)\}/)
+  assert.ok(m, '.pm-search-slot 规则必须存在')
+  assert.match(m[1], /width:0/, '收起态 width 必须为 0')
+  assert.match(m[1], /flex:0 0 auto/, '槽必须不可压缩')
+  assert.match(m[1], /overflow:hidden/, '槽要裁剪（收起时不显示内容）')
+  // 回归防线：槽内固定宽元素绝不能再让"最小内容宽度"变大
+  assert.ok(!/\.pm-search-slot\{[^}]*display:grid/.test(CLIENT_SRC), '不得再回到 grid 0fr 方案（它会让内部固定宽计入最小内容宽度）')
+})
+
+test('展开的搜索框与按钮拼成一个整体（按钮右圆角归零 + 输入框左边框去掉）', () => {
+  assert.match(CLIENT_SRC, /\.pm-search-btn\.on\{[^}]*border-radius:10px 0 0 10px/, '展开时按钮右圆角归零')
+  assert.match(CLIENT_SRC, /\.pm-search-box\{[^}]*border-left:none/, '输入框左边框去掉')
+  assert.match(CLIENT_SRC, /\.pm-search-box\{[^}]*border-radius:0 10px 10px 0/, '输入框右圆角保留')
+})
+
+test('点按钮展开后可以正常打字：不得有"失焦自动收起"', () => {
+  assert.ok(!/onBlur: \(\) => setTimeout\(\(\) => \{ if \(!q\) setSearchOpen\(false\) \}, 150\)/.test(CLIENT_SRC), '不得有失焦自动收起（会让刚展开就收起）')
+  assert.match(CLIENT_SRC, /onClick: \(\) => \{ if \(searchOpen && !q\) setSearchOpen\(false\); else setSearchOpen\(true\); \}/, '只有再点按钮才收起')
+  assert.match(CLIENT_SRC, /autoFocus: true/, '展开自动聚焦')
 })
