@@ -354,3 +354,28 @@ test('「最近：xxx」独立一行，位于筛选胶囊**上方**，且给足�
   const iRecent2 = CLIENT_SRC.indexOf('className: "pm-recent-row"')
   assert.ok(iRecent2 > 0 && iRecent2 < iBar, '「最近」行在筛选行之前（四个分类上方）')
 })
+
+// ===== 防重复（用户实测"最近胶囊有两个"）：渲染块必须唯一 =====
+
+test('渲染块唯一性：「最近」只出现一次、排序下拉只出现一次（防复制粘贴残留）', () => {
+  const count = (re) => (CLIENT_SRC.match(re) || []).length
+  // 渲染（h(...)）层面各只能有一处
+  assert.equal(count(/className: "pm-recent-row"/g), 1, '「最近」独立行只能有一处渲染')
+  assert.equal(count(/className: "pm-stat pm-stat-recent"/g), 1, '「最近：xxx」胶囊只能渲染一次（曾出现两个）')
+  assert.equal(count(/className: "pm-select pm-sort"/g), 1, '排序下拉只能渲染一次')
+  assert.equal(count(/className: "pm-search"/g), 1, '搜索块只能渲染一次')
+  // 注意：pm-save 是**共享样式类**（保存 / 确定导入 / 选这个文件夹…多处复用，属正常）；
+  // 真正该唯一的是"目录行里那个保存按钮"，用内容特征判断。
+  assert.equal(count(/onClick: submitDir \}, "保存"/g), 1, '目录行的「保存」按钮只能渲染一次')
+  assert.equal(count(/className: "pm-stat", title: "当前项目的记忆条数"/g), 1, '记忆胶囊只能渲染一次')
+  // 关键：目录行与筛选行各自的成员，不得互相串场
+  const iTool = CLIENT_SRC.indexOf('className: "pm-toolbar"')
+  const iRecent = CLIENT_SRC.indexOf('className: "pm-recent-row"')
+  const iBar = CLIENT_SRC.indexOf('className: "pm-bar"')
+  const iList = CLIENT_SRC.indexOf('h("ul", { className: "pm-list"')
+  assert.ok(iTool < iRecent && iRecent < iBar && iBar < iList, '区块顺序必须是 目录行 → 最近行 → 筛选行 → 列表')
+  const bar = CLIENT_SRC.slice(iBar, iList)
+  assert.ok(!/pm-stat-recent/.test(bar), '筛选行里不得再有「最近」（曾重复导致两个）')
+  assert.match(bar, /pm-sort/, '筛选行里必须还有排序下拉')
+  assert.match(bar, /marginLeft: "auto"/, '排序靠右常驻')
+})
