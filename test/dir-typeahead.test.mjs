@@ -419,13 +419,24 @@ test('约束②③：搜索框在🔍**右侧**展开，且展开时🔍位置�
   const iBtn = CLIENT_SRC.indexOf('className: "pm-search-btn"')
   const iSlot = CLIENT_SRC.indexOf('className: "pm-search-slot"')
   assert.ok(iBtn > 0 && iSlot > iBtn, '搜索槽必须排在🔍按钮**之后**（向右展开）')
-  // 槽宽度 0 → 210 展开，是唯一宽度变化源（🔍 自身宽度固定 40px，不参与变化）
-  assert.match(CLIENT_SRC, /\.pm-search-slot\{flex:0 0 auto;width:0;overflow:hidden;transition:width \.22s ease-out\}/, '槽收起 0 宽')
-  assert.match(CLIENT_SRC, /\.pm-search-slot\.open\{width:210px\}/, '槽展开 210px')
+  // 🔍 自身固定 40px 且不可压缩
   assert.match(CLIENT_SRC, /\.pm-search-btn\{[^}]*width:40px[^}]*flex:0 0 auto/, '🔍 固定 40px 且不可压缩（展开时自身不动）')
-  // 展开时输入框主动缩窄吸收宽度变化，🔍 不被推走
-  assert.match(CLIENT_SRC, /\.pm-toolbar\.pm-toolbar-search \.pm-ac-wrap\{width:130px\}/, '展开时输入框缩到 150px（吸收宽度变化，🔍 位置不变）')
-  assert.match(CLIENT_SRC, /className: "pm-toolbar" \+ \(searchOpen \? " pm-toolbar-search" : ""\)/, '工具条按 searchOpen 切换搜索态类名')
+  // 唯一宽度变化源必须是🔍**之后**的槽
+  assert.match(CLIENT_SRC, /\.pm-search-slot\{flex:0 0 auto;width:0;overflow:hidden;transition:width \.22s ease-out\}/, '槽收起 0 宽（唯一变化源）')
+  assert.match(CLIENT_SRC, /\.pm-search-slot\.open\{width:210px\}/, '槽展开 210px')
+  // 👇 关键不变量：🔍 左边的控件在展开前后**宽度必须完全一致**。
+  // 反例（曾真实存在）：`.pm-toolbar.pm-toolbar-search .pm-ac-wrap{width:130px}`。
+  // 输入框在🔍左边，缩它会把 保存/🔍 一起向左拽 —— 静态解析结果 x: 340 → 300（正好 −40px），
+  // 与用户硬约束③「点搜索按钮，按钮自身位置不能移动」直接冲突。
+  const css = CLIENT_SRC.slice(CLIENT_SRC.indexOf('const CSS = `') + 12, CLIENT_SRC.indexOf('`;', CLIENT_SRC.indexOf('const CSS = `')))
+  // 只看**状态选择器**：形如 `.pm-toolbar.<state> ...{...}`，即工具条上挂了状态类名的规则。
+  // 正常的基础规则 `.pm-toolbar .pm-ac-wrap{...}`（无状态类）不算，它是收起/展开共用的固定宽度。
+  const stateRules = [...css.matchAll(/\.pm-toolbar\.[\w-]+[^{]*\{[^}]*\}/g)].map((m) => m[0])
+  assert.deepEqual(
+    stateRules, [],
+    '展开态不得有任何改宽度的状态规则（会拖动🔍）：' + stateRules.join(' / '),
+  )
+  assert.ok(!/pm-toolbar-search/.test(CLIENT_SRC), 'pm-toolbar-search 死类名已移除（展开改宽度方案已废弃）')
 })
 
 // ===== CSS 冲突守卫（2026-09-12 事故：.pm-ac-wrap 上 flex:1 覆盖工具条宽度规则 → 改了多轮不生效） =====
