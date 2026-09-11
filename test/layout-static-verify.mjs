@@ -27,7 +27,7 @@ function toolbarItems({ searchOpen }) {
     { id: 'ac-wrap', basis: 170, grow: 0, shrink: 0 }, // .pm-toolbar .pm-ac-wrap flex:0 0 auto;width:170px
     { id: 'save', basis: 74, grow: 0, shrink: 0 },    // .pm-save   flex:0 0 auto
     { id: 'search', basis: 40, grow: 0, shrink: 0 },  // .pm-search-btn flex:0 0 auto;width:40px
-    { id: 'slot', basis: searchOpen ? 210 : 0, grow: 0, shrink: 0 }, // .pm-search-slot width:0 / .open 210px
+    { id: 'slot', basis: searchOpen ? 130 : 0, grow: 0, shrink: 0 }, // .pm-search-slot width:0 / .open 130px
     { id: 'stat', basis: 88, grow: 0, shrink: 0 },    // .pm-stat   flex:0 0 auto
   ];
 }
@@ -136,7 +136,7 @@ console.log('\n[6] 横向溢出阈值（超过则必须换行/滚动条 —— �
   console.log(`  · 展开态最小需求宽度 = ${needed}px（${needed} 以下会溢出/出现横向滚动条）`);
   const closedNeeded = toolbarItems({ searchOpen: false }).reduce((a, it) => a + it.basis, 0) + GAP * 5;
   console.log(`  · 收起态最小需求宽度 = ${closedNeeded}px`);
-  check('展开态需求 < 收起态需求 + 210', needed - closedNeeded === 210);
+  check('展开态需求 < 收起态需求 + 130', needed - closedNeeded === 130);
 }
 
 console.log('\n[7] ★用户要求：胶囊**紧跟🔍**（收起态不被推到最后、展开时让位但不出屏）');
@@ -153,11 +153,11 @@ for (const W of WIDTHS) {
     Math.abs(statC.x - (slotC.right + GAP)) < 0.01,
     '胶囊左边距应 = 搜索槽右边界 + 1 个 gap',
   )
-  // 展开：胶囊被向右推开正好 210px（= 搜索框宽度）
+  // 展开：胶囊被向右推开正好 130px（= 搜索框宽度）
   check(
     `W=${W} 展开时胶囊向右让位 ${statO.x - statC.x}px`,
-    Math.abs(statO.x - statC.x - 210) < 0.01,
-    '让位距离应恰为搜索框宽度 210px',
+    Math.abs(statO.x - statC.x - 130) < 0.01,
+    '让位距离应恰为搜索框宽度 130px',
   )
   // 关键：胶囊不得超出容器右边界（用户实测"被顶出界面"）
   check(
