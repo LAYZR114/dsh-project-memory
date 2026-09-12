@@ -281,7 +281,8 @@ test('搜索：向右推开（grid 0fr→1fr）+ 「记忆 N」让位动画 + �
   assert.match(CLIENT_SRC, /className: "pm-search-slot" \+ \(searchOpen \? " open" : ""\)/, 'slot.open 与 searchOpen 绑定')
   assert.match(CLIENT_SRC, /onClick: \(\) => \{ if \(searchOpen && !q\) setSearchOpen\(false\); else setSearchOpen\(true\); \}/, '再点按钮：空词收起、有词保持')
   assert.match(CLIENT_SRC, /if \(e\.key === "Escape"\) \{ if \(!q\) setSearchOpen\(false\); else setQ\(""\); \}/, 'Esc：先清词、空词收起')
-  assert.match(CLIENT_SRC, /const focusEnd = \(el\) => \{[\s\S]{0,200}?el\.setSelectionRange\(n, n\)/, '展开后光标落在末尾')
+  assert.match(CLIENT_SRC, /const moveCaretToEnd = \(el\) => \{[\s\S]{0,200}?el\.setSelectionRange\(n, n\)/, '光标落末尾的助手（**只移光标、不抢焦点**）')
+  assert.ok(!/const focusEnd = /.test(CLIENT_SRC), '旧的 focusEnd（内含 focus() 且被当回调 ref）必须删除')
 })
 
 test('「最近：xxx」独立一行（筛选胶囊上方）、垂直居中、可压缩省略', () => {
@@ -558,4 +559,33 @@ test('输入框提示文本要精简（过长会被截断显示不全）', () =>
   const m = CLIENT_SRC.match(/placeholder: "输入项目目录，回车加载"/)
   assert.ok(m, '目录输入框提示应为"输入项目目录，回车加载"（原文本过长被截断）')
   assert.match(CLIENT_SRC, /placeholder: "搜索记忆…"/, '搜索框提示应为"搜索记忆…"（原"搜索标题、描述或正文…"在 130px 内显示不全）')
+})
+
+// ===== 焦点守卫（2026-09-12 二次事故：回调 ref 里调 focus() 导致每次渲染抢焦点）=====
+
+test('搜索输入框的聚焦只能有一个入口（useEffect），ref 回调绝不可含 focus', () => {
+  // 剥离注释，只看真实代码
+  const code = CLIENT_SRC.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((line) => {
+    const q1 = line.indexOf('"'), q2 = line.lastIndexOf('"')
+    const slash = line.indexOf('//')
+    if (slash >= 0 && !(q1 >= 0 && slash > q1 && slash < q2)) return line.slice(0, slash)
+    return line
+  }).join('\n')
+
+  // ① 不得有 autoFocus
+  assert.ok(!/autoFocus/.test(code), '代码中不得有 autoFocus')
+  // ② 回调 ref 里不得出现 focus(
+  const refLines = code.split('\n').filter((l) => /ref:\s*\(el\)\s*=>/.test(l))
+  assert.ok(refLines.length > 0, '应存在回调 ref')
+  for (const l of refLines) {
+    assert.ok(!/\.focus\(/.test(l), '回调 ref 内不得调用 focus()（每次渲染都会执行 → 抢焦点）：' + l.trim())
+  }
+  // ③ 全文 focus() 调用点数量受限（只允许：展开时聚焦、清空后回焦）
+  const focusCalls = (code.match(/\.focus\(\)/g) || []).length
+  assert.ok(focusCalls <= 2, '全文 focus() 调用不得超过 2 处（展开聚焦 / 清空回焦），实际 ' + focusCalls + ' 处')
+  // ④ 必须存在"只聚焦一次"的防护
+  assert.match(CLIENT_SRC, /const searchFocusedOnceRef = useRef\(false\)/, '必须有 searchFocusedOnceRef 防重复聚焦')
+  assert.match(CLIENT_SRC, /if \(searchFocusedOnceRef\.current\) return undefined;/, '已聚焦过就不再聚焦')
+  // ⑤ 光标工具只移光标、不抢焦点
+  assert.match(CLIENT_SRC, /const moveCaretToEnd = \(el\) => \{\s*\n\s*if \(!el\) return;\s*\n\s*try \{ const n = String\(el\.value \|\| ""\)\.length; el\.setSelectionRange\(n, n\) \}/, 'moveCaretToEnd 只做 setSelectionRange（不得含 focus）')
 })
