@@ -153,7 +153,7 @@ test('接线：下拉读取历史时先清理；组件与交互齐备', () => {
   assert.match(CLIENT_SRC, /className: "pm-ac"/, '要有下拉容器')
   assert.match(CLIENT_SRC, /const dirFiltered = \(text\) => \{[\s\S]{0,300}?includes\(q\)/, '输入即过滤（子串匹配）')
   assert.match(CLIENT_SRC, /onMouseDown: \(e\) => \{ e\.preventDefault\(\); pickDir\(p\.cwd\); \}/, '鼠标点选（mousedown 抢在 blur 前）')
-  assert.match(CLIENT_SRC, /onFocus: \(\) => \{ loadDirs\(\); setDirOpen\(true\); \}/, '聚焦时拉取现有项目')
+  assert.match(CLIENT_SRC, /onFocus: \(\) => \{ if \(!dirList\.length && !dirLoadedRef\.current\) loadDirs\(\); \}/, '聚焦只做一次幂等加载（不再每次聚焦都拉取，避免重渲染闪烁）')
   assert.match(CLIENT_SRC, /fetchJson\("\/projects", \{ method: "POST", body: JSON\.stringify\(\{ action: "projects" \}\) \}\)/, '要去宿主取现有项目')
   assert.match(CLIENT_SRC, /h\("button", \{ className: "pm-save", onClick: submitDir \}, "保存"\)/, '"保存"按钮走同一条提交逻辑')
 })
@@ -529,4 +529,24 @@ test('缺陷②：「撤销」按钮不得依赖提示消息是否存在', () =>
 test('缺陷③：死状态/死变量已清除', () => {
   assert.ok(!/const \[collapsed, setCollapsed\]/.test(CLIENT_SRC), 'collapsed 死状态已删除')
   assert.ok(!/const statusLabel = \{/.test(CLIENT_SRC), 'statusLabel 死变量已删除')
+})
+
+// ===== 修复"点目录输入框就闪、无法输入"（2026-09-12 用户实测）=====
+
+test('目录输入框不得再"聚焦即打开下拉"（那是闪烁的来源）', () => {
+  // 旧写法（导致闪烁循环）：onFocus 打开下拉 + onChange 打开下拉 + onBlur 延迟关闭
+  assert.ok(!/onFocus: \(\) => \{ loadDirs\(\); setDirOpen\(true\); \}/.test(CLIENT_SRC), 'onFocus 不得再直接 setDirOpen(true)（聚焦打开 → 抖动关闭 → 再打开 = 闪烁）')
+  assert.ok(!/onBlur: \(\) => setTimeout\(\(\) => setDirOpen\(false\), 150\)/.test(CLIENT_SRC), 'onBlur 不得再延迟关闭（延迟窗口内重渲染会造成抖动）')
+  // 新写法：onBlur 立即关闭；下拉仅在有匹配项时渲染
+  assert.match(CLIENT_SRC, /onBlur: \(\) => setDirOpen\(false\)/, 'onBlur 立即关闭下拉')
+  assert.match(CLIENT_SRC, /\(dirOpen && dirFiltered\(cwd\)\.length\)\s*\n?\s*\? h\("ul", \{ className: "pm-ac" \}/, '仅当"已打开且有匹配项"时才渲染下拉（空列表不再闪出空面板）')
+  // 幂等加载：聚焦不重复请求
+  assert.match(CLIENT_SRC, /const dirLoadedRef = useRef\(false\)/, '必须有 dirLoadedRef 标记')
+  assert.match(CLIENT_SRC, /dirLoadedRef\.current = true/, '加载完成后要置标记')
+})
+
+test('输入框提示文本要精简（过长会被截断显示不全）', () => {
+  const m = CLIENT_SRC.match(/placeholder: "输入项目目录，回车加载"/)
+  assert.ok(m, '目录输入框提示应为"输入项目目录，回车加载"（原文本过长被截断）')
+  assert.match(CLIENT_SRC, /placeholder: "搜索记忆…"/, '搜索框提示应为"搜索记忆…"（原"搜索标题、描述或正文…"在 130px 内显示不全）')
 })
