@@ -278,7 +278,7 @@ test('搜索：向右推开（grid 0fr→1fr）+ 「记忆 N」让位动画 + �
   assert.ok(!/\.pm-search-box\{[^}]*position:absolute/.test(CLIENT_SRC), '搜索框不得绝对定位覆盖（零遮挡）')
   assert.match(CLIENT_SRC, /\.pm-stat\{[^}]*transition:transform \.22s ease-out/, '胶囊有让位位移动画（被推开是滑过去的）')
   assert.match(CLIENT_SRC, /\.pm-search-btn\.on\{background:#141414;color:#8f8f8f;border-radius:10px 0 0 10px\}/, '展开时按钮右圆角归零 → 与输入框拼成一个整体')
-  assert.match(CLIENT_SRC, /className: "pm-search-slot" \+ \(searchOpen \? " open" : ""\)/, 'slot.open 与 searchOpen 绑定')
+  assert.match(CLIENT_SRC, /searchOpen \? h\("div", \{ key: "slot", className: "pm-search-slot open" \}/, 'slot 只在展开时渲染（收起=卸载，结构性防抢焦点）')
   assert.match(CLIENT_SRC, /onClick: \(\) => \{ if \(searchOpen && !q\) setSearchOpen\(false\); else setSearchOpen\(true\); \}/, '再点按钮：空词收起、有词保持')
   assert.match(CLIENT_SRC, /if \(e\.key === "Escape"\) \{ if \(!q\) setSearchOpen\(false\); else setQ\(""\); \}/, 'Esc：先清词、空词收起')
   assert.match(CLIENT_SRC, /const moveCaretToEnd = \(el\) => \{[\s\S]{0,200}?el\.setSelectionRange\(n, n\)/, '光标落末尾的助手（**只移光标、不抢焦点**）')
@@ -365,7 +365,7 @@ test('剥离注释后，目录行的关键控件必须仍然存在（防被注�
   const must = [
     ['保存按钮', /h\("button", \{ className: "pm-save", onClick: submitDir \}, "保存"\)/],
     ['搜索按钮', /className: "pm-search-btn" \+ \(\(searchOpen \|\| q\) \? " on" : ""\)/],
-    ['搜索槽', /className: "pm-search-slot" \+ \(searchOpen \? " open" : ""\)/],
+    ['搜索槽', /searchOpen \? h\("div", \{ key: "slot", className: "pm-search-slot open" \}/],
     ['记忆胶囊', /className: "pm-stat", title: "当前项目的记忆条数"/],
     ['最近行', /className: "pm-recent-row"/],
     ['排序下拉', /className: "pm-select pm-sort"/],
@@ -427,7 +427,7 @@ test('约束①：收起态四个控件紧贴（输入框不抢剩余空间，�
 test('约束②③：搜索框在🔍**右侧**展开，且展开时🔍位置不变', () => {
   // 结构顺序：按钮在前、搜索槽在后 → 只可能向右展开
   const iBtn = CLIENT_SRC.indexOf('className: "pm-search-btn"')
-  const iSlot = CLIENT_SRC.indexOf('className: "pm-search-slot"')
+  const iSlot = CLIENT_SRC.indexOf('className: "pm-search-slot open"')
   assert.ok(iBtn > 0 && iSlot > iBtn, '搜索槽必须排在🔍按钮**之后**（向右展开）')
   // 🔍 自身固定 40px 且不可压缩
   assert.match(CLIENT_SRC, /\.pm-search-btn\{[^}]*width:40px[^}]*flex:0 0 auto/, '🔍 固定 40px 且不可压缩（展开时自身不动）')
@@ -581,11 +581,17 @@ test('搜索输入框的聚焦只能有一个入口（useEffect），ref 回调�
     assert.ok(!/\.focus\(/.test(l), '回调 ref 内不得调用 focus()（每次渲染都会执行 → 抢焦点）：' + l.trim())
   }
   // ③ 全文 focus() 调用点数量受限（只允许：展开时聚焦、清空后回焦）
-  const focusCalls = (code.match(/\.focus\(\)/g) || []).length
+  // 先把**行内块注释**也剥掉（如 `catch (e) { /* 忽略 */ }`），否则会把注释里的内容算进调用数
+  const codeNoInline = code.replace(/\/\*[\s\S]*?\*\//g, '')
+  const focusCalls = (codeNoInline.match(/\.focus\(\)/g) || []).length
   assert.ok(focusCalls <= 2, '全文 focus() 调用不得超过 2 处（展开聚焦 / 清空回焦），实际 ' + focusCalls + ' 处')
-  // ④ 必须存在"只聚焦一次"的防护
-  assert.match(CLIENT_SRC, /const searchFocusedOnceRef = useRef\(false\)/, '必须有 searchFocusedOnceRef 防重复聚焦')
-  assert.match(CLIENT_SRC, /if \(searchFocusedOnceRef\.current\) return undefined;/, '已聚焦过就不再聚焦')
+  // ④ 核心不变量：searchOpen=false ⟹ DOM 中**不存在**搜索输入框（结构性根治，比"只聚焦一次"标记更强）
+  assert.match(CLIENT_SRC, /searchOpen \? h\("div", \{ key: "slot", className: "pm-search-slot open" \}/, 'input 必须随 slot 一起条件渲染（收起=卸载）')
+  assert.match(CLIENT_SRC, /\]\)\)\) : null,/, '条件渲染必须有 : null 分支（收起时不渲染）')
+  assert.ok(!/searchFocusedOnceRef\.current = true/.test(CLIENT_SRC), '不再依赖"只聚焦一次"标记（元素展开时才创建）')
+  // 依赖性警告：确保依赖数组只含 searchOpen（加 q 会导致每次输入都聚焦 → 抢焦点第三次复发）
+  assert.match(CLIENT_SRC, /\}, \[searchOpen\]\);/, '聚焦 effect 依赖必须恰为 [searchOpen]')
+  assert.ok(!/\}, \[searchOpen, q\]\);/.test(CLIENT_SRC), '依赖中绝不可加入 q')
   // ⑤ 光标工具只移光标、不抢焦点
   assert.match(CLIENT_SRC, /const moveCaretToEnd = \(el\) => \{\s*\n\s*if \(!el\) return;\s*\n\s*try \{ const n = String\(el\.value \|\| ""\)\.length; el\.setSelectionRange\(n, n\) \}/, 'moveCaretToEnd 只做 setSelectionRange（不得含 focus）')
 })
