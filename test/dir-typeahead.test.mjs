@@ -595,3 +595,18 @@ test('搜索输入框的聚焦只能有一个入口（useEffect），ref 回调�
   // ⑤ 光标工具只移光标、不抢焦点
   assert.match(CLIENT_SRC, /const moveCaretToEnd = \(el\) => \{\s*\n\s*if \(!el\) return;\s*\n\s*try \{ const n = String\(el\.value \|\| ""\)\.length; el\.setSelectionRange\(n, n\) \}/, 'moveCaretToEnd 只做 setSelectionRange（不得含 focus）')
 })
+
+// ===== 胶囊数字居中（2026-09-12 用户实测：缩成数字后偏左上）=====
+
+test('展开时的数字胶囊必须居中对齐（特异性必须压过 .pm-stat b 的 margin-left）', () => {
+  // 基础规则 .pm-stat b 有 margin-left:3px（特异性 0,1,1）
+  assert.match(CLIENT_SRC, /\.pm-stat b\{color:#e6e6e6;font-weight:600;margin-left:3px\}/, '基础 b 规则含 margin-left:3px（这是把数字推偏的原因）')
+  // 因此 mini 规则必须用 .pm-stat.pm-stat-mini b（0,2,1）才能覆盖
+  assert.match(CLIENT_SRC, /\.pm-stat\.pm-stat-mini b\{[^}]*margin-left:0/, 'mini 的 b 必须 margin-left:0 且特异性更高（.pm-stat.pm-stat-mini b）')
+  // 只写 .pm-stat-mini b 会因同特异性后者胜而失效
+  assert.ok(!/[^.]\.pm-stat-mini b\{/.test(CLIENT_SRC.replace(/\.pm-stat\.pm-stat-mini b\{/g, '')), '不得存在低特异性的 .pm-stat-mini b 规则')
+  // 容器要 justify-content:center 保证水平居中（inline-flex + align-items 只管垂直）
+  assert.match(CLIENT_SRC, /\.pm-stat\.pm-stat-mini\{[^}]*justify-content:center/, 'mini 胶囊必须 justify-content:center')
+  // 行高归一，避免 13px 数字在 36px 高胶囊里偏上
+  assert.match(CLIENT_SRC, /\.pm-stat\.pm-stat-mini b\{[^}]*line-height:1/, 'mini 数字需 line-height:1 防偏移')
+})
