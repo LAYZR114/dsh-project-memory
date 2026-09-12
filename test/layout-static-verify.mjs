@@ -27,8 +27,9 @@ function toolbarItems({ searchOpen }) {
     { id: 'ac-wrap', basis: 170, grow: 0, shrink: 0 }, // .pm-toolbar .pm-ac-wrap flex:0 0 auto;width:170px
     { id: 'save', basis: 74, grow: 0, shrink: 0 },    // .pm-save   flex:0 0 auto
     { id: 'search', basis: 40, grow: 0, shrink: 0 },  // .pm-search-btn flex:0 0 auto;width:40px
-    { id: 'slot', basis: searchOpen ? 130 : 0, grow: 0, shrink: 0 }, // .pm-search-slot width:0 / .open 130px
-    { id: 'stat', basis: 88, grow: 0, shrink: 0 },    // .pm-stat   flex:0 0 auto
+    { id: 'slot', basis: searchOpen ? 100 : 0, grow: 0, shrink: 0 }, // .pm-search-slot width:0 / .open 100px
+    // 记忆胶囊：**展开时缩成纯数字**（.pm-stat-mini，省约 48px），否则 88px
+    { id: 'stat', basis: searchOpen ? 44 : 88, grow: 0, shrink: 0 },  // .pm-stat / .pm-stat-mini
   ];
 }
 
@@ -136,7 +137,11 @@ console.log('\n[6] 横向溢出阈值（超过则必须换行/滚动条 —— �
   console.log(`  · 展开态最小需求宽度 = ${needed}px（${needed} 以下会溢出/出现横向滚动条）`);
   const closedNeeded = toolbarItems({ searchOpen: false }).reduce((a, it) => a + it.basis, 0) + GAP * 5;
   console.log(`  · 收起态最小需求宽度 = ${closedNeeded}px`);
-  check('展开态需求 < 收起态需求 + 130', needed - closedNeeded === 130);
+  // 展开的净增量 = 搜索框 100px − 胶囊缩窄 (88−44) = 100 − 44 = 56px
+  check('展开态净增 56px（搜索框 +100 − 胶囊缩窄 44）', needed - closedNeeded === 56,
+    `实际净增 ${needed - closedNeeded}px`)
+  // 关键：展开态必须装得进 DSH 设置面板（≈540px 内容区）——本轮修复目标
+  check(`展开态需求 ${needed}px ≤ 面板 540px（胶囊不被顶出）`, needed <= 540, '仍超出面板宽度');
 }
 
 console.log('\n[7] ★用户要求：胶囊**紧跟🔍**（收起态不被推到最后、展开时让位但不出屏）');
@@ -153,11 +158,11 @@ for (const W of WIDTHS) {
     Math.abs(statC.x - (slotC.right + GAP)) < 0.01,
     '胶囊左边距应 = 搜索槽右边界 + 1 个 gap',
   )
-  // 展开：胶囊被向右推开正好 130px（= 搜索框宽度）
+  // 展开：胶囊被向右推开正好 100px（= 搜索框宽度）
   check(
     `W=${W} 展开时胶囊向右让位 ${statO.x - statC.x}px`,
-    Math.abs(statO.x - statC.x - 130) < 0.01,
-    '让位距离应恰为搜索框宽度 130px',
+    Math.abs(statO.x - statC.x - 100) < 0.01,
+    '让位距离应恰为搜索框宽度 100px',
   )
   // 关键：胶囊不得超出容器右边界（用户实测"被顶出界面"）
   check(
@@ -166,6 +171,33 @@ for (const W of WIDTHS) {
     '胶囊被顶出屏幕',
   )
   void slotO
+}
+
+console.log('\n[8] ★用户实测关键场景：DSH 设置面板（内容区 ≈540px）里展开搜索，胶囊必须完整可见');
+{
+  const PANEL = 540
+  const closed = layout(toolbarItems({ searchOpen: false }), PANEL)
+  const open = layout(toolbarItems({ searchOpen: true }), PANEL)
+  const statO = posOf(open, 'stat')
+  const statC = posOf(closed, 'stat')
+  console.log(`  · 收起态总宽 ${Math.round(statC.right)}px / 展开态总宽 ${Math.round(statO.right)}px（面板 ${PANEL}px）`)
+  check(
+    `收起态装得下（${Math.round(statC.right)} ≤ ${PANEL}）`,
+    statC.right <= PANEL,
+    '收起态本身就溢出',
+  )
+  // 这是本轮的修复目标：展开态必须也装得下（胶囊缩成数字 + 搜索框缩到 100px 才做到）
+  check(
+    `展开态装得下（${Math.round(statO.right)} ≤ ${PANEL}）→ 胶囊不会被顶出屏幕`,
+    statO.right <= PANEL,
+    '展开态仍溢出 → 需要继续缩减（搜索框/胶囊）',
+  )
+  // 展开时胶囊必须比收起态更窄（"缩成纯数字"的结构性证据）
+  check(
+    `展开时胶囊变窄（${posOf(closed, 'stat').w} → ${statO.w}px，缩成纯数字）`,
+    statO.w < posOf(closed, 'stat').w,
+    '胶囊未按预期缩窄',
+  )
 }
 
 // ── 可选：位置表 ────────────────────────────────────────────────────────────

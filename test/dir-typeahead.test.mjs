@@ -235,7 +235,7 @@ test('渲染块唯一性：「最近」只出现一次、排序下拉只出现�
   // 注意：pm-save 是**共享样式类**（保存 / 确定导入 / 选这个文件夹…多处复用，属正常）；
   // 真正该唯一的是"目录行里那个保存按钮"，用内容特征判断。
   assert.equal(count(/onClick: submitDir \}, "保存"/g), 1, '目录行的「保存」按钮只能渲染一次')
-  assert.equal(count(/className: "pm-stat", title: "当前项目的记忆条数"/g), 1, '记忆胶囊只能渲染一次')
+  assert.equal(count(/className: "pm-stat" \+ \(searchOpen \? " pm-stat-mini" : ""\)/g), 1, '记忆胶囊只能渲染一次')
   // 关键：目录行与筛选行各自的成员，不得互相串场
   const iTool = CLIENT_SRC.indexOf('className: "pm-toolbar"')
   const iRecent = CLIENT_SRC.indexOf('className: "pm-recent-row"')
@@ -273,8 +273,8 @@ test('五控件统一固定高度 36px + 同圆角（不再"哪个矮一截"）'
 
 test('搜索：向右推开（grid 0fr→1fr）+ 「记忆 N」让位动画 + 零遮挡', () => {
   assert.match(CLIENT_SRC, /\.pm-search-slot\{flex:0 0 auto;width:0;overflow:hidden;transition:width \.22s ease-out\}/, '收起态 width:0 + 不可压缩 + 220ms ease-out')
-  assert.match(CLIENT_SRC, /\.pm-search-slot\.open\{width:130px\}/, '展开 130px（向右推开胶囊）')
-  assert.match(CLIENT_SRC, /\.pm-search-inner\{width:130px;display:flex;align-items:center\}/, '内层固定 130px（外层裁剪，过渡不溢出）')
+  assert.match(CLIENT_SRC, /\.pm-search-slot\.open\{width:100px\}/, '展开 100px（向右推开胶囊）')
+  assert.match(CLIENT_SRC, /\.pm-search-inner\{width:100px;display:flex;align-items:center\}/, '内层固定 100px（外层裁剪，过渡不溢出）')
   assert.ok(!/\.pm-search-box\{[^}]*position:absolute/.test(CLIENT_SRC), '搜索框不得绝对定位覆盖（零遮挡）')
   assert.match(CLIENT_SRC, /\.pm-stat\{[^}]*transition:transform \.22s ease-out/, '胶囊有让位位移动画（被推开是滑过去的）')
   assert.match(CLIENT_SRC, /\.pm-search-btn\.on\{background:#141414;color:#8f8f8f;border-radius:10px 0 0 10px\}/, '展开时按钮右圆角归零 → 与输入框拼成一个整体')
@@ -307,7 +307,7 @@ test('清爽度：核心类各只有 1 条规则（禁止重复追加成屎山�
   // 精确匹配独立类名（避免把新类 pm-search-inner 误判为废弃的 pm-search-in）
   for (const dead of ['pm-search-lens', 'pm-search-wrap']) assert.ok(!CLIENT_SRC.includes(dead), '废弃类名残留：' + dead)
   assert.ok(!/pm-search-in\{/.test(CLIENT_SRC) && !/@keyframes pm-search-in\{/.test(CLIENT_SRC), '废弃的 pm-search-in 动画/规则已清')
-  assert.match(CLIENT_SRC, /\.pm-search-inner\{width:130px;display:flex;align-items:center\}/, '新类 pm-search-inner 存在（固定 130px 由外层裁剪）')
+  assert.match(CLIENT_SRC, /\.pm-search-inner\{width:100px;display:flex;align-items:center\}/, '新类 pm-search-inner 存在（固定 100px 由外层裁剪）')
 })
 
 // ===== 用户定案图（2026-09-11 第二轮）：按图逐条落实 =====
@@ -366,7 +366,7 @@ test('剥离注释后，目录行的关键控件必须仍然存在（防被注�
     ['保存按钮', /h\("button", \{ className: "pm-save", onClick: submitDir \}, "保存"\)/],
     ['搜索按钮', /className: "pm-search-btn" \+ \(\(searchOpen \|\| q\) \? " on" : ""\)/],
     ['搜索槽', /searchOpen \? h\("div", \{ key: "slot", className: "pm-search-slot open" \}/],
-    ['记忆胶囊', /className: "pm-stat", title: "当前项目的记忆条数"/],
+    ['记忆胶囊', /className: "pm-stat" \+ \(searchOpen \? " pm-stat-mini" : ""\)/],
     ['最近行', /className: "pm-recent-row"/],
     ['排序下拉', /className: "pm-select pm-sort"/],
   ]
@@ -375,7 +375,7 @@ test('剥离注释后，目录行的关键控件必须仍然存在（防被注�
 
 test('关键控件的渲染语句必须独占可执行行（不得与 // 同行）', () => {
   const lines = CLIENT_SRC.split('\n')
-  const keys = ['"pm-save"', '"pm-search-btn"', '"pm-stat", title: "当前项目的记忆条数"', '"pm-select pm-sort"', '"pm-recent-row"']
+  const keys = ['"pm-save"', '"pm-search-btn"', '"pm-stat" + (searchOpen ? " pm-stat-mini" : "")', '"pm-select pm-sort"', '"pm-recent-row"']
   for (const k of keys) {
     const hit = lines.findIndex((l) => l.includes(k))
     assert.ok(hit >= 0, '必须存在：' + k)
@@ -433,9 +433,9 @@ test('约束②③：搜索框在🔍**右侧**展开，且展开时🔍位置�
   assert.match(CLIENT_SRC, /\.pm-search-btn\{[^}]*width:40px[^}]*flex:0 0 auto/, '🔍 固定 40px 且不可压缩（展开时自身不动）')
   // 唯一宽度变化源必须是🔍**之后**的槽
   assert.match(CLIENT_SRC, /\.pm-search-slot\{flex:0 0 auto;width:0;overflow:hidden;transition:width \.22s ease-out\}/, '槽收起 0 宽（唯一变化源）')
-  assert.match(CLIENT_SRC, /\.pm-search-slot\.open\{width:130px\}/, '槽展开 130px')
+  assert.match(CLIENT_SRC, /\.pm-search-slot\.open\{width:100px\}/, '槽展开 100px')
   // 👇 关键不变量：🔍 左边的控件在展开前后**宽度必须完全一致**。
-  // 反例（曾真实存在）：`.pm-toolbar.pm-toolbar-search .pm-ac-wrap{width:130px}`。
+  // 反例（曾真实存在）：`.pm-toolbar.pm-toolbar-search .pm-ac-wrap{width:100px}`。
   // 输入框在🔍左边，缩它会把 保存/🔍 一起向左拽 —— 静态解析结果 x: 340 → 300（正好 −40px），
   // 与用户硬约束③「点搜索按钮，按钮自身位置不能移动」直接冲突。
   const css = CLIENT_SRC.slice(CLIENT_SRC.indexOf('const CSS = `') + 12, CLIENT_SRC.indexOf('`;', CLIENT_SRC.indexOf('const CSS = `')))
@@ -558,7 +558,7 @@ test('目录输入框不得再"聚焦即打开下拉"（那是闪烁的来源）
 test('输入框提示文本要精简（过长会被截断显示不全）', () => {
   const m = CLIENT_SRC.match(/placeholder: "输入项目目录，回车加载"/)
   assert.ok(m, '目录输入框提示应为"输入项目目录，回车加载"（原文本过长被截断）')
-  assert.match(CLIENT_SRC, /placeholder: "搜索记忆…"/, '搜索框提示应为"搜索记忆…"（原"搜索标题、描述或正文…"在 130px 内显示不全）')
+  assert.match(CLIENT_SRC, /placeholder: "搜索…"/, '搜索框提示应为"搜索…"（宽度缩到 100px，"搜索记忆…"显示不全）')
 })
 
 // ===== 焦点守卫（2026-09-12 二次事故：回调 ref 里调 focus() 导致每次渲染抢焦点）=====
