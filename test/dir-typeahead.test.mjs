@@ -330,7 +330,16 @@ test('展开的搜索框与按钮拼成一个整体（按钮右圆角归零 + �
 test('点按钮展开后可以正常打字：不得有"失焦自动收起"', () => {
   assert.ok(!/onBlur: \(\) => setTimeout\(\(\) => \{ if \(!q\) setSearchOpen\(false\) \}, 150\)/.test(CLIENT_SRC), '不得有失焦自动收起（会让刚展开就收起）')
   assert.match(CLIENT_SRC, /onClick: \(\) => \{ if \(searchOpen && !q\) setSearchOpen\(false\); else setSearchOpen\(true\); \}/, '只有再点按钮才收起')
-  assert.match(CLIENT_SRC, /autoFocus: true/, '展开自动聚焦')
+  // 剥离注释后再查（注释里正解释"为什么不能用 autoFocus"，直接搜会被注释骗到）
+  const codeOnly = CLIENT_SRC.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((line) => {
+    const q1 = line.indexOf('"'), q2 = line.lastIndexOf('"')
+    const slash = line.indexOf('//')
+    if (slash >= 0 && !(q1 >= 0 && slash > q1 && slash < q2)) return line.slice(0, slash)
+    return line
+  }).join('\n')
+  assert.ok(!/autoFocus/.test(codeOnly), '代码中不得使用 autoFocus（该输入框始终在 DOM 中，每次重渲染都抢焦点 → 用户点目录框时字打进搜索框）')
+  assert.match(CLIENT_SRC, /const searchInputRef = useRef\(null\)/, '改为在展开时用 effect 聚焦一次')
+  assert.match(CLIENT_SRC, /\}, \[searchOpen\]\);/, '聚焦 effect 以 searchOpen 为依赖')
 })
 
 // ===== 防"注释吞代码"（2026-09-12 真实事故：保存按钮被 // 整行注掉，测试与自查全被骗过） =====
